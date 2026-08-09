@@ -1,0 +1,11 @@
+file,line,raw_hit_count,classification,rationale
+rtl/int8_tensor_accel.sv,21,0,reviewed_exclusion,module port/declaration instrumentation
+rtl/int8_tensor_accel.sv,26,0,reviewed_exclusion,module port/declaration instrumentation
+rtl/int8_tensor_accel.sv,28,0,reviewed_exclusion,module port/declaration instrumentation
+rtl/int8_tensor_accel.sv,29,0,reviewed_exclusion,module port/declaration instrumentation
+rtl/int8_tensor_accel.sv,30,0,reviewed_exclusion,module port/declaration instrumentation
+rtl/int8_tensor_accel.sv,39,0,reviewed_exclusion,module port/declaration instrumentation
+rtl/int8_tensor_accel.sv,40,0,reviewed_exclusion,module port/declaration instrumentation
+rtl/int8_tensor_accel.sv,45,0,reviewed_exclusion,module port/declaration instrumentation
+rtl/int8_tensor_accel.sv,63,0,reviewed_exclusion,Verilator function-assignment artifact; relu_zero crosses hit on all four channels
+rtl/int8_tensor_accel.sv,126,0,reviewed_exclusion,structurally unreachable default for exhaustive 2-bit cfg_kind

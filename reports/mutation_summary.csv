@@ -1,0 +1,5 @@
+mutation,protected_behavior,status
+MUT_UNSIGNED_MAC,signed MAC interpretation,DETECTED
+MUT_RELU_BYPASS,negative ReLU clamp,DETECTED
+MUT_SATURATION_WRAP,signed INT8 saturation,DETECTED
+MUT_TAG_CORRUPT,transaction tag ordering,DETECTED

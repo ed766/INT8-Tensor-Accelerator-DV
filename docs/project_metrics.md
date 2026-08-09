@@ -1,0 +1,16 @@
+# Project Metrics
+
+| Metric | Value | Interpretation |
+| --- | ---: | --- |
+| `pytorch_rtl_scenarios` | 63 / 63 | Every output word and tag compared |
+| `functional_coverage` | 35 / 35 | Project-defined feature points |
+| `interaction_coverage` | 24 / 24 | Same-transaction channel/result crosses |
+| `streaming_throughput` | 1.000 vectors/cycle | 16 consecutive vectors |
+| `named_assertions` | 8 | Bound reusable SVA properties |
+| `rtl_mutations` | 4 / 4 | Expected defects detected |
+| `raw_line_coverage` | 75 / 85 (88.24%) | Verilator execution evidence |
+| `reviewed_line_coverage` | 75 / 75 (100.00%) | 10 explicit exclusions |
+| `raw_branch_coverage` | NA (Verilator 5.020 LCOV) | Verilator branch/expression proxy |
+| `yosys_synthesis` | PASS | 181 generic cells |
+
+All values are regenerated from checked-in CSV evidence by `make release-check`.

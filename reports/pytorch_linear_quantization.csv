@@ -1,0 +1,2 @@
+model,samples,input_scale,mean_absolute_error,maximum_absolute_error,int32_accumulator_min,int32_accumulator_max,status
+"torch.nn.Linear(4,4)",16,0.00787402,0.00166904,0.00470918,-15799,43567,PASS

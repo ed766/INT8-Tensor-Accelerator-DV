@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="360" viewBox="0 0 1120 360" role="img" aria-labelledby="title desc">
+  <title id="title">INT8 tensor accelerator architecture and verification flow</title>
+  <desc id="desc">PyTorch generates quantized vectors and expected outputs. A SystemVerilog driver configures a four by four signed MAC array, requantization, ReLU and saturation. Assertions and a scoreboard check the RTL output.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f7f1e3"/><stop offset="1" stop-color="#dcecf0"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="5" flood-opacity="0.16"/></filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L10,3 L0,6 Z" fill="#264653"/></marker>
+  </defs>
+  <rect width="1120" height="360" rx="24" fill="url(#bg)"/>
+  <text x="560" y="38" text-anchor="middle" font-family="Georgia,serif" font-weight="700" font-size="23" fill="#17324d">PyTorch-to-RTL Integer Inference Verification</text>
+  <g filter="url(#shadow)" font-family="Trebuchet MS,sans-serif">
+    <rect x="35" y="90" width="195" height="165" rx="16" fill="#fffdf7" stroke="#e76f51" stroke-width="3"/>
+    <text x="132" y="123" text-anchor="middle" font-weight="700" font-size="18" fill="#9b3d27">PyTorch Oracle</text>
+    <text x="132" y="154" text-anchor="middle" font-size="14" fill="#243b4a">INT8 tensors</text>
+    <text x="132" y="178" text-anchor="middle" font-size="14" fill="#243b4a">INT32 accumulation</text>
+    <text x="132" y="202" text-anchor="middle" font-size="14" fill="#243b4a">Requantize + clamp</text>
+    <text x="132" y="226" text-anchor="middle" font-size="14" fill="#243b4a">Expected tags/results</text>
+
+    <rect x="305" y="90" width="500" height="165" rx="16" fill="#fff" stroke="#2a9d8f" stroke-width="3"/>
+    <text x="555" y="122" text-anchor="middle" font-weight="700" font-size="18" fill="#16675f">SystemVerilog Accelerator</text>
+    <rect x="330" y="145" width="125" height="78" rx="10" fill="#e9f5f2" stroke="#2a9d8f"/>
+    <text x="392" y="178" text-anchor="middle" font-size="14">4×4 signed</text><text x="392" y="199" text-anchor="middle" font-size="14">INT8 MACs</text>
+    <rect x="492" y="145" width="125" height="78" rx="10" fill="#e9f5f2" stroke="#2a9d8f"/>
+    <text x="554" y="178" text-anchor="middle" font-size="14">Per-channel</text><text x="554" y="199" text-anchor="middle" font-size="14">bias + scale</text>
+    <rect x="654" y="145" width="125" height="78" rx="10" fill="#e9f5f2" stroke="#2a9d8f"/>
+    <text x="716" y="178" text-anchor="middle" font-size="14">ReLU + INT8</text><text x="716" y="199" text-anchor="middle" font-size="14">saturation</text>
+
+    <rect x="880" y="90" width="205" height="165" rx="16" fill="#fffdf7" stroke="#457b9d" stroke-width="3"/>
+    <text x="982" y="123" text-anchor="middle" font-weight="700" font-size="18" fill="#275b7a">DV Evidence</text>
+    <text x="982" y="154" text-anchor="middle" font-size="14" fill="#243b4a">Word/tag scoreboard</text>
+    <text x="982" y="178" text-anchor="middle" font-size="14" fill="#243b4a">Protocol assertions</text>
+    <text x="982" y="202" text-anchor="middle" font-size="14" fill="#243b4a">Coverage + mutations</text>
+    <text x="982" y="226" text-anchor="middle" font-size="14" fill="#243b4a">Latency + synthesis</text>
+  </g>
+  <path d="M230 172 H300" stroke="#264653" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M805 172 H875" stroke="#264653" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M455 184 H487" stroke="#264653" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M617 184 H649" stroke="#264653" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="560" y="304" text-anchor="middle" font-family="Trebuchet MS,sans-serif" font-size="15" fill="#344e5c">Ready/valid streaming • tag-preserving • output backpressure • deterministic seeded vectors</text>
+</svg>

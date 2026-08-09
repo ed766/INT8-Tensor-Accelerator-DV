@@ -1,0 +1,2 @@
+scope,line_hit,line_total,line_percent,branch_hit,branch_total,branch_percent,reviewed_line_hit,reviewed_line_total,reviewed_line_percent,reviewed_exclusions
+raw_accelerator_rtl,75,85,88.24,0,0,NA,75,75,100.00,10
