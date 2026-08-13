@@ -12,16 +12,26 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
+      - name: Cache pinned OSS CAD Suite
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.tool_cache }}/oss-cad-suite-2026-07-01
+          key: oss-cad-suite-linux-x64-2026-07-01
       - name: Install open-source tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y verilator yosys boolector make g++
-          python -m pip install click numpy
+          sudo apt-get install -y verilator yosys make g++
+          python -m pip install numpy
           python -m pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cpu
-          git clone https://github.com/YosysHQ/sby.git /tmp/sby
-          git -C /tmp/sby checkout b1a1e98cba941ec8433f8dc27f416cd7bb7f14be
-          sudo make -C /tmp/sby install PREFIX=/usr/local
-          boolector --version
+          root="${RUNNER_TOOL_CACHE}/oss-cad-suite-2026-07-01"
+          if [[ ! -x "${root}/bin/sby" ]]; then
+            archive="${RUNNER_TEMP}/oss-cad-suite.tgz"
+            curl -L --retry 3 -o "${archive}" https://github.com/YosysHQ/oss-cad-suite-build/releases/download/2026-07-01/oss-cad-suite-linux-x64-20260701.tgz
+            echo "bc9799358a843e854f60ebbee1834573a9f7db9c1dcbed3ea7a32a36520612dc  ${archive}" | sha256sum -c -
+            mkdir -p "${root}"
+            tar -xzf "${archive}" --strip-components=1 -C "${root}"
+          fi
+          echo "${root}/bin" >> "${GITHUB_PATH}"
       - name: Run complete evidence gate
         run: make release-check
       - name: Require reproducible reports
