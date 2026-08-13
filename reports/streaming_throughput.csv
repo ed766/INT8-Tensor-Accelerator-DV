@@ -1,2 +1,2 @@
-scenario,vectors,acceptance_cycles,vectors_per_cycle,status
-back_to_back_identity,16,16,1.000,PASS
+scenario,vectors,command_input_cycles,vectors_per_cycle,active_macs_per_cycle,status
+back_to_back_k4_identity,16,32,0.500,16,PASS

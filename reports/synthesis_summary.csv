@@ -1,2 +1,3 @@
-status,cells,register_cells,multiplier_cells,warnings,reason
-PASS,181,41,20,5,open-source generic-cell proxy; warnings are expected array-to-register mapping
+variant,lanes,outputs,status,cells,register_cells,multiplier_cells,warnings
+baseline_4x4,4,4,PASS,10249,589,20,22
+scaled_8x8,8,8,PASS,69861,1153,72,22

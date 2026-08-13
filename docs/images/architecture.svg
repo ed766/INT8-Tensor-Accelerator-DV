@@ -1,40 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="360" viewBox="0 0 1120 360" role="img" aria-labelledby="title desc">
-  <title id="title">INT8 tensor accelerator architecture and verification flow</title>
-  <desc id="desc">PyTorch generates quantized vectors and expected outputs. A SystemVerilog driver configures a four by four signed MAC array, requantization, ReLU and saturation. Assertions and a scoreboard check the RTL output.</desc>
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f7f1e3"/><stop offset="1" stop-color="#dcecf0"/></linearGradient>
-    <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="5" flood-opacity="0.16"/></filter>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L10,3 L0,6 Z" fill="#264653"/></marker>
-  </defs>
-  <rect width="1120" height="360" rx="24" fill="url(#bg)"/>
-  <text x="560" y="38" text-anchor="middle" font-family="Georgia,serif" font-weight="700" font-size="23" fill="#17324d">PyTorch-to-RTL Integer Inference Verification</text>
-  <g filter="url(#shadow)" font-family="Trebuchet MS,sans-serif">
-    <rect x="35" y="90" width="195" height="165" rx="16" fill="#fffdf7" stroke="#e76f51" stroke-width="3"/>
-    <text x="132" y="123" text-anchor="middle" font-weight="700" font-size="18" fill="#9b3d27">PyTorch Oracle</text>
-    <text x="132" y="154" text-anchor="middle" font-size="14" fill="#243b4a">INT8 tensors</text>
-    <text x="132" y="178" text-anchor="middle" font-size="14" fill="#243b4a">INT32 accumulation</text>
-    <text x="132" y="202" text-anchor="middle" font-size="14" fill="#243b4a">Requantize + clamp</text>
-    <text x="132" y="226" text-anchor="middle" font-size="14" fill="#243b4a">Expected tags/results</text>
-
-    <rect x="305" y="90" width="500" height="165" rx="16" fill="#fff" stroke="#2a9d8f" stroke-width="3"/>
-    <text x="555" y="122" text-anchor="middle" font-weight="700" font-size="18" fill="#16675f">SystemVerilog Accelerator</text>
-    <rect x="330" y="145" width="125" height="78" rx="10" fill="#e9f5f2" stroke="#2a9d8f"/>
-    <text x="392" y="178" text-anchor="middle" font-size="14">4×4 signed</text><text x="392" y="199" text-anchor="middle" font-size="14">INT8 MACs</text>
-    <rect x="492" y="145" width="125" height="78" rx="10" fill="#e9f5f2" stroke="#2a9d8f"/>
-    <text x="554" y="178" text-anchor="middle" font-size="14">Per-channel</text><text x="554" y="199" text-anchor="middle" font-size="14">bias + scale</text>
-    <rect x="654" y="145" width="125" height="78" rx="10" fill="#e9f5f2" stroke="#2a9d8f"/>
-    <text x="716" y="178" text-anchor="middle" font-size="14">ReLU + INT8</text><text x="716" y="199" text-anchor="middle" font-size="14">saturation</text>
-
-    <rect x="880" y="90" width="205" height="165" rx="16" fill="#fffdf7" stroke="#457b9d" stroke-width="3"/>
-    <text x="982" y="123" text-anchor="middle" font-weight="700" font-size="18" fill="#275b7a">DV Evidence</text>
-    <text x="982" y="154" text-anchor="middle" font-size="14" fill="#243b4a">Word/tag scoreboard</text>
-    <text x="982" y="178" text-anchor="middle" font-size="14" fill="#243b4a">Protocol assertions</text>
-    <text x="982" y="202" text-anchor="middle" font-size="14" fill="#243b4a">Coverage + mutations</text>
-    <text x="982" y="226" text-anchor="middle" font-size="14" fill="#243b4a">Latency + synthesis</text>
-  </g>
-  <path d="M230 172 H300" stroke="#264653" stroke-width="3" marker-end="url(#arrow)"/>
-  <path d="M805 172 H875" stroke="#264653" stroke-width="3" marker-end="url(#arrow)"/>
-  <path d="M455 184 H487" stroke="#264653" stroke-width="2" marker-end="url(#arrow)"/>
-  <path d="M617 184 H649" stroke="#264653" stroke-width="2" marker-end="url(#arrow)"/>
-  <text x="560" y="304" text-anchor="middle" font-family="Trebuchet MS,sans-serif" font-size="15" fill="#344e5c">Ready/valid streaming • tag-preserving • output backpressure • deterministic seeded vectors</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="520" viewBox="0 0 1280 520">
+  <rect width="1280" height="520" fill="#f4f1e8"/>
+  <style>.h{font:700 24px Georgia,serif;fill:#17324d}.t{font:600 17px Georgia,serif;fill:#17324d}.s{font:14px Georgia,serif;fill:#31465a}.b{stroke:#17324d;stroke-width:2;rx:14}.a{stroke:#bf4f28;stroke-width:3;fill:none;marker-end:url(#m)}</style>
+  <defs><marker id="m" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#bf4f28"/></marker></defs>
+  <text x="40" y="48" class="h">Tiled INT8 Linear-Layer Accelerator and PyTorch Co-Verification</text>
+  <rect x="40" y="100" width="205" height="110" fill="#d7e7df" class="b"/><text x="65" y="137" class="t">PyTorch Export</text><text x="65" y="165" class="s">calibration + INT8 tensors</text><text x="65" y="187" class="s">two-layer MLP oracle</text>
+  <rect x="305" y="100" width="200" height="110" fill="#f2d7be" class="b"/><text x="335" y="137" class="t">Command + Chunks</text><text x="335" y="165" class="s">K = 4…64, tagged</text><text x="335" y="187" class="s">4 activations / cycle</text>
+  <rect x="565" y="75" width="235" height="160" fill="#c8d8e8" class="b"/><text x="600" y="112" class="t">Parameter Banks A / B</text><text x="600" y="140" class="s">weights, bias, zero points</text><text x="600" y="162" class="s">multiplier, shift, ReLU</text><text x="600" y="195" class="s">configure inactive bank</text><text x="600" y="217" class="s">while active bank executes</text>
+  <rect x="860" y="75" width="190" height="160" fill="#e8d5a9" class="b"/><text x="895" y="112" class="t">MAC Engine</text><text x="895" y="140" class="s">16 MACs / active cycle</text><text x="895" y="162" class="s">INT32 accumulation</text><text x="895" y="184" class="s">round + zero point</text><text x="895" y="206" class="s">ReLU + saturation</text>
+  <rect x="1105" y="100" width="135" height="110" fill="#d8cbe3" class="b"/><text x="1125" y="137" class="t">Result FIFO</text><text x="1125" y="165" class="s">4 tagged entries</text><text x="1125" y="187" class="s">backpressure-safe</text>
+  <path d="M245 155 H305" class="a"/><path d="M505 155 H565" class="a"/><path d="M800 155 H860" class="a"/><path d="M1050 155 H1105" class="a"/>
+  <rect x="145" y="310" width="250" height="130" fill="#fff" class="b"/><text x="185" y="347" class="t">Independent Checking</text><text x="185" y="375" class="s">130 exact workloads</text><text x="185" y="397" class="s">hidden + final MLP words</text><text x="185" y="419" class="s">no RTL tolerance</text>
+  <rect x="515" y="310" width="250" height="130" fill="#fff" class="b"/><text x="565" y="347" class="t">DV Evidence</text><text x="565" y="375" class="s">assertions + edge tests</text><text x="565" y="397" class="s">coverage + mutations</text><text x="565" y="419" class="s">bounded formal safety</text>
+  <rect x="885" y="310" width="250" height="130" fill="#fff" class="b"/><text x="925" y="347" class="t">Architecture Study</text><text x="925" y="375" class="s">K / pressure latency</text><text x="925" y="397" class="s">double-buffer overlap</text><text x="925" y="419" class="s">4×4 vs 8×8 synthesis</text>
+  <path d="M1170 210 V270 H270 V310" class="a"/><path d="M683 235 V310" class="a"/><path d="M955 235 V310" class="a"/>
 </svg>

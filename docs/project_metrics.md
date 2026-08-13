@@ -2,15 +2,18 @@
 
 | Metric | Value | Interpretation |
 | --- | ---: | --- |
-| `pytorch_rtl_scenarios` | 63 / 63 | Every output word and tag compared |
-| `functional_coverage` | 35 / 35 | Project-defined feature points |
-| `interaction_coverage` | 24 / 24 | Same-transaction channel/result crosses |
-| `streaming_throughput` | 1.000 vectors/cycle | 16 consecutive vectors |
-| `named_assertions` | 8 | Bound reusable SVA properties |
-| `rtl_mutations` | 4 / 4 | Expected defects detected |
-| `raw_line_coverage` | 75 / 85 (88.24%) | Verilator execution evidence |
-| `reviewed_line_coverage` | 75 / 75 (100.00%) | 10 explicit exclusions |
+| `pytorch_rtl_scenarios` | 130 / 130 | Every output word and tag compared |
+| `functional_coverage` | 64 / 64 | Project-defined feature points |
+| `interaction_coverage` | 48 / 48 | Same-transaction channel/result crosses |
+| `two_layer_mlp` | PASS | 64 intermediate + 64 final words |
+| `streaming_throughput` | 0.500 vectors/cycle | 16 K=4 commands; 16 active MACs/cycle |
+| `protocol_edge_checks` | 15 / 15 | Illegal command, bank isolation, FIFO pressure, and reset |
+| `named_assertions` | 21 | Bound reusable SVA properties |
+| `rtl_mutations` | 9 / 9 | Expected defects detected |
+| `formal_groups` | 2 / 2 | Reduced-geometry safety and reachability |
+| `raw_line_coverage` | 159 / 173 (91.91%) | Verilator execution evidence |
+| `reviewed_line_coverage` | 159 / 159 (100.00%) | 14 explicit exclusions |
 | `raw_branch_coverage` | NA (Verilator 5.020 LCOV) | Verilator branch/expression proxy |
-| `yosys_synthesis` | PASS | 181 generic cells |
+| `yosys_synthesis` | PASS | 4x4 baseline: 10249 generic cells |
 
 All values are regenerated from checked-in CSV evidence by `make release-check`.

@@ -4,3 +4,6 @@ __pycache__/
 *.vcd
 *.fst
 *.log
+formal/int8_control/
+formal/int8_control_prove/
+formal/int8_control_cover/

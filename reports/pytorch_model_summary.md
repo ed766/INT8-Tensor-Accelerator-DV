@@ -1,7 +1,6 @@
 # PyTorch Golden Model
 
-- PyTorch version: `2.7.1` (runtime build suffix intentionally normalized)
-- Deterministic scenarios: `63`
-- Manifest SHA-256: `2bc91646c0d352933e43bd6e416e2b187acf8059cb55a83e611fb7678e2fe951`
-- Arithmetic: signed INT8 inputs/weights, INT32 dot products and bias, signed fixed-point multiplier/right shift, optional ReLU, signed INT8 saturation.
-- The model predicts integer results independently of the RTL implementation.
+- PyTorch version: `2.7.1`
+- Workloads: `130` (`30` directed + `100` seeded random)
+- Manifest SHA-256: `fbce38006520ce83263182132bf736dacfe253fb5206bdaa40b2f1b9283d44ee`
+- Arithmetic: asymmetric signed INT8 inputs and weights, INT32 accumulation, per-channel round-to-nearest requantization, output zero point, optional ReLU, and INT8 saturation.

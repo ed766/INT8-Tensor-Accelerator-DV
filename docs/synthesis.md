@@ -1,7 +1,8 @@
 # Synthesis Proxy
 
-| Status | Generic cells | Register cells | Multiplier cells | Warnings |
-| --- | ---: | ---: | ---: | ---: |
-| PASS | 181 | 41 | 20 | 5 |
+| Variant | MAC array | Status | Generic cells | Registers | Multipliers | Warnings |
+| --- | ---: | --- | ---: | ---: | ---: | ---: |
+| baseline_4x4 | 16 | PASS | 10249 | 589 | 20 | 22 |
+| scaled_8x8 | 64 | PASS | 69861 | 1153 | 72 | 22 |
 
-The five Yosys warnings document intentional mapping of small configuration arrays to registers. Yosys statistics are an open-source structural proxy. They are not area, timing, power, or implementation signoff.
+Yosys statistics are open-source structural proxies. Array lowering warnings are retained and these values are not area, timing, power, or implementation signoff.

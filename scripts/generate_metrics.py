@@ -25,6 +25,9 @@ def main() -> int:
     code = rows("reports/code_coverage_summary.csv")[0]
     synth = rows("reports/synthesis_summary.csv")[0]
     streaming = rows("reports/streaming_throughput.csv")[0]
+    mlp = rows("reports/pytorch_mlp_rtl_summary.csv")[0]
+    formal = rows("reports/formal_summary.csv")
+    edges = rows("reports/protocol_edge_summary.csv")[0]
     assertion_text = (ROOT / "sim" / "int8_accel_assertions.sv").read_text()
     assertions = len(re.findall(r"^\s*a_[a-zA-Z0-9_]+:", assertion_text, re.MULTILINE))
     branch_value = (
@@ -35,13 +38,16 @@ def main() -> int:
         ("pytorch_rtl_scenarios", f"{sum(r['status'] == 'PASS' for r in regression)} / {len(regression)}", "Every output word and tag compared"),
         ("functional_coverage", f"{sum(r['status'] == 'COVERED' for r in feature)} / {len(feature)}", "Project-defined feature points"),
         ("interaction_coverage", f"{sum(r['status'] == 'COVERED' for r in crosses)} / {len(crosses)}", "Same-transaction channel/result crosses"),
-        ("streaming_throughput", f"{streaming['vectors_per_cycle']} vectors/cycle", f"{streaming['vectors']} consecutive vectors"),
+        ("two_layer_mlp", mlp["status"], f"{mlp['intermediate_words']} intermediate + {mlp['final_words']} final words"),
+        ("streaming_throughput", f"{streaming['vectors_per_cycle']} vectors/cycle", f"{streaming['vectors']} K=4 commands; {streaming['active_macs_per_cycle']} active MACs/cycle"),
+        ("protocol_edge_checks", f"{edges['checks']} / {edges['checks']}", "Illegal command, bank isolation, FIFO pressure, and reset"),
         ("named_assertions", str(assertions), "Bound reusable SVA properties"),
         ("rtl_mutations", f"{sum(r['status'] == 'DETECTED' for r in mutations)} / {len(mutations)}", "Expected defects detected"),
+        ("formal_groups", f"{sum(r['status'] == 'PASS' for r in formal)} / {len(formal)}", "Reduced-geometry safety and reachability"),
         ("raw_line_coverage", f"{code['line_hit']} / {code['line_total']} ({code['line_percent']}%)", "Verilator execution evidence"),
         ("reviewed_line_coverage", f"{code['reviewed_line_hit']} / {code['reviewed_line_total']} ({code['reviewed_line_percent']}%)", f"{code['reviewed_exclusions']} explicit exclusions"),
         ("raw_branch_coverage", branch_value, "Verilator branch/expression proxy"),
-        ("yosys_synthesis", synth["status"], f"{synth['cells']} generic cells"),
+        ("yosys_synthesis", synth["status"], f"4x4 baseline: {synth['cells']} generic cells"),
     ]
     with (ROOT / "reports" / "project_metrics.csv").open("w", newline="") as handle:
         writer = csv.writer(handle, lineterminator="\n")
@@ -52,9 +58,12 @@ def main() -> int:
         "pytorch_rtl_scenarios": "PyTorch-to-RTL comparisons",
         "functional_coverage": "Functional coverage",
         "interaction_coverage": "Interaction crosses",
+        "two_layer_mlp": "Two-layer PyTorch/RTL chain",
         "streaming_throughput": "Measured steady-state throughput",
+        "protocol_edge_checks": "Protocol edge checks",
         "named_assertions": "Named assertions",
         "rtl_mutations": "RTL mutations detected",
+        "formal_groups": "Formal safety/cover groups",
         "raw_line_coverage": "Raw line coverage",
         "reviewed_line_coverage": "Reviewed executable line coverage",
         "raw_branch_coverage": "Raw branch/expression coverage",

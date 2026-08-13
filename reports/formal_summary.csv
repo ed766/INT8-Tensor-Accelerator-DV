@@ -1,0 +1,3 @@
+group,mode,status,depth,detail
+control_safety,bounded_solver_safety,PASS,16,six control/FIFO invariants
+reachability,reachable_cover,PASS,20,FIFO-full/error/bank-swap covers

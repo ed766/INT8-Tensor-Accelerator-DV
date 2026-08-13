@@ -1,11 +1,12 @@
 # Documentation
 
 - [Project metrics](project_metrics.md)
-- [Numerical contract](numerical_contract.md)
-- [PyTorch Linear quantization demo](pytorch_linear_demo.md)
+- [Numerical and command contract](numerical_contract.md)
+- [Two-layer PyTorch/RTL demo](pytorch_mlp_demo.md)
 - [Verification plan](verification_plan.md)
 - [Coverage](coverage.md)
 - [Code coverage](code_coverage.md)
-- [Mutation validation](bug_mutations.md)
+- [RTL mutation validation](bug_mutations.md)
+- [Formal evidence](formal.md)
 - [Performance characterization](performance.md)
-- [Synthesis proxy](synthesis.md)
+- [Synthesis comparison](synthesis.md)

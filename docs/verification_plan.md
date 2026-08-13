@@ -1,14 +1,16 @@
 # Verification Plan
 
-| Requirement | Stimulus | Checker | Assertion / coverage | Evidence |
+| Requirement | Stimulus | Independent checker | Assertion / coverage | Evidence |
 | --- | --- | --- | --- | --- |
-| Signed INT8 dot product | Directed corners + 25 seeds | PyTorch integer oracle | Signed/zero/corner bins | `rtl_vs_pytorch_summary.csv` |
-| Bias and requantization | Per-channel multiplier/shift matrix | Exact output-word comparison | Unit/scaled and zero/nonzero shift | `functional_coverage.csv` |
-| ReLU and saturation | Negative, positive, overflow cases | Exact signed INT8 result | Six result classes per channel | `cross_coverage.csv` |
-| Ready/valid ordering | Source gaps and sink stalls | Tag and count scoreboard | Stability, occupancy, prior-accept assertions | Simulation log |
-| Steady-state throughput | 16 consecutive tagged vectors | Cycle-by-cycle output scoreboard | Simultaneous retire/accept | `streaming_throughput.csv` |
-| Checker sensitivity | Four compile-time RTL defects | Expected mismatch/assertion failure | Mutation status | `mutation_summary.csv` |
-| Implementation proxy | Reviewed 4×4 configuration | Yosys elaboration/statistics | Warning-clean lint | `synthesis_summary.csv` |
-| Latency sensitivity | Output stalls from 0–6 cycles | Measured accept-to-output cycles | p50/p95/max | `performance_summary.csv` |
+| Multicycle `K=4–64` MAC | Directed matrix + 100 seeds | PyTorch integer oracle | K, operand, accumulator, result bins | `rtl_vs_pytorch_summary.csv` |
+| Asymmetric quantization | Input/weight/output zero-point classes | Exact adjusted dot product | Zero-point × ReLU × saturation crosses | `cross_coverage.csv` |
+| Signed rounding and saturation | Positive/negative remainder boundaries | Signed round-to-nearest model | Exact/remainder/result bins | `functional_coverage.csv` |
+| Double-buffered parameters | Alternating bank commands and live inactive-bank writes | Bank-aware scoreboard | Active-bank protection and bank-swap properties | `protocol_edge_summary.csv` |
+| Result FIFO and backpressure | Full FIFO, simultaneous pop/push, delayed output | Tagged output scoreboard | FIFO bounds/stability/accounting | assertions + edge test |
+| Reset containment | Reset during accumulation | No ghost-result checker | reset clears command/FIFO state | edge test |
+| Two-layer inference | Exported PyTorch MLP | Hidden and final word comparison | 128 exact word comparisons | `pytorch_mlp_rtl_summary.csv` |
+| Checker sensitivity | Nine compile-time RTL defects | Existing model/assertions | Mutation detection | `mutation_summary.csv` |
+| Solver evidence | Reduced 2×2 engine | SymbiYosys/Z3 | Safety plus non-vacuous covers | `formal_summary.csv` |
+| Implementation scaling | 4×4 and 8×8 variants | Yosys elaboration/statistics | Warning-clean Verilator lint | `synthesis_summary.csv` |
 
-Functional coverage is project-defined and traceable to scenario data. Raw Verilator code coverage is reported separately. Neither is a commercial coverage-signoff claim.
+Functional and cross coverage are project-defined and derived from workloads that execute against RTL. Code coverage and formal results are reported independently.

@@ -1,10 +1,15 @@
-# Mutation Validation
+# RTL Mutation Validation
 
-| Mutation | Injected fault | Expected detection |
+| Mutation | Injected defect | Intended detection |
 | --- | --- | --- |
-| `MUT_UNSIGNED_MAC` | Treat signed operands as unsigned | PyTorch result mismatch |
-| `MUT_RELU_BYPASS` | Disable the negative ReLU clamp | Directed and cross-case mismatch |
-| `MUT_SATURATION_WRAP` | Wrap instead of saturating to INT8 | Positive/negative saturation mismatch |
-| `MUT_TAG_CORRUPT` | Flip the output tag LSB | Tag scoreboard failure |
+| `MUT_UNSIGNED_MAC` | Interpret signed operands as unsigned | PyTorch result mismatch |
+| `MUT_ZEROPOINT_BYPASS` | Ignore asymmetric input/weight offsets | Zero-point workloads |
+| `MUT_ROUND_TRUNCATE` | Truncate instead of round | Signed remainder boundaries |
+| `MUT_RELU_BYPASS` | Disable ReLU clamp | Negative ReLU cases |
+| `MUT_SATURATION_WRAP` | Wrap instead of saturate | Positive/negative saturation |
+| `MUT_TAG_CORRUPT` | Flip output tag LSB | Tag scoreboard/assertion |
+| `MUT_BANK_ALIAS` | Force every command to bank zero | Alternating-bank workloads |
+| `MUT_OUTPUT_ORDER` | Reverse output-channel packing | Exact word comparison |
+| `MUT_K_LAST_EARLY` | Drop the terminal lane contribution | Multicycle K-boundary cases |
 
-Mutations are compiled one at a time and pass validation only when the nominal checker or assertion detects the injected defect. A compile failure is not counted as detection.
+Each mutation must elaborate and execute. Detection requires an existing scoreboard or assertion failure; compilation failure is not counted.

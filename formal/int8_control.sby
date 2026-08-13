@@ -1,0 +1,20 @@
+[tasks]
+prove
+cover
+
+[options]
+prove: mode bmc
+prove: depth 16
+cover: mode cover
+cover: depth 20
+
+[engines]
+smtbmc z3
+
+[script]
+read -formal -sv int8_tensor_accel.sv int8_control_formal.sv
+prep -top int8_control_formal
+
+[files]
+../rtl/int8_tensor_accel.sv
+int8_control_formal.sv

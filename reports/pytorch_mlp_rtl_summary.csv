@@ -1,0 +1,2 @@
+scenario,samples,intermediate_words,final_words,status
+two_layer_chained_rtl,16,64,64,PASS

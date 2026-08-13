@@ -10,9 +10,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MUTATIONS = {
     "MUT_UNSIGNED_MAC": "signed MAC interpretation",
+    "MUT_ZEROPOINT_BYPASS": "asymmetric input and weight zero points",
+    "MUT_ROUND_TRUNCATE": "round-to-nearest requantization",
     "MUT_RELU_BYPASS": "negative ReLU clamp",
     "MUT_SATURATION_WRAP": "signed INT8 saturation",
     "MUT_TAG_CORRUPT": "transaction tag ordering",
+    "MUT_BANK_ALIAS": "double-buffered parameter-bank selection",
+    "MUT_OUTPUT_ORDER": "output-channel ordering",
+    "MUT_K_LAST_EARLY": "multicycle K-boundary completion",
 }
 
 

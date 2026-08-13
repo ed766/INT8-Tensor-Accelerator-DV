@@ -1,5 +1,10 @@
 mutation,protected_behavior,status
 MUT_UNSIGNED_MAC,signed MAC interpretation,DETECTED
+MUT_ZEROPOINT_BYPASS,asymmetric input and weight zero points,DETECTED
+MUT_ROUND_TRUNCATE,round-to-nearest requantization,DETECTED
 MUT_RELU_BYPASS,negative ReLU clamp,DETECTED
 MUT_SATURATION_WRAP,signed INT8 saturation,DETECTED
 MUT_TAG_CORRUPT,transaction tag ordering,DETECTED
+MUT_BANK_ALIAS,double-buffered parameter-bank selection,DETECTED
+MUT_OUTPUT_ORDER,output-channel ordering,DETECTED
+MUT_K_LAST_EARLY,multicycle K-boundary completion,DETECTED

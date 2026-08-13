@@ -1,94 +1,110 @@
 #!/usr/bin/env python3
-"""Generate traceable feature and same-transaction cross coverage reports."""
+"""Generate 64 feature bins and 48 same-workload interaction crosses."""
 
 from __future__ import annotations
-
-import csv
-import json
+import csv, json
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[1]
 
 
-def main() -> int:
-    with (ROOT / "reports" / "scenario_manifest.csv").open() as handle:
-        rows = list(csv.DictReader(handle))
+def main()->int:
+    with (ROOT/"reports"/"scenario_manifest.csv").open() as handle:
+        rows=list(csv.DictReader(handle))
+    parsed=[]
+    for row in rows:
+        item=dict(row)
+        for key in ("input","weights","bias","multiplier","shift","weight_zp","output_zp",
+                    "accumulator","product","expected","result_classes"):
+            item[key]=json.loads(row[key])
+        parsed.append(item)
 
-    def values(key: str) -> list[list[int]]:
-        return [json.loads(row[key]) for row in rows]
+    bins=[]
+    def add(name:str,predicate,source:str)->None:
+        contributors=[str(r["name"]) for r in parsed if predicate(r)]
+        bins.append((name,bool(contributors),";".join(contributors[:8]),source))
+    add("family_directed",lambda r:r["family"]=="directed","manifest")
+    add("family_random",lambda r:r["family"]=="random","manifest")
+    for k in (4,8,16,32,64): add(f"k_{k}",lambda r,k=k:int(r["k"])==k,"command")
+    for bank in (0,1): add(f"bank_{bank}",lambda r,bank=bank:int(r["bank"])==bank,"configuration")
+    value_groups=("input","weights")
+    predicates=(("zero",lambda v:v==0),("positive",lambda v:v>0),("negative",lambda v:v<0),
+                ("int8_min",lambda v:v==-128),("int8_max",lambda v:v==127))
+    for group in value_groups:
+        for label,predicate in predicates:
+            add(f"{group}_{label}",lambda r,g=group,p=predicate:any(p(v) for v in r[g]),group)
+    for result in ("positive","negative","zero","sat_pos","sat_neg","relu_zero"):
+        add(f"result_{result}",lambda r,result=result:result in r["result_classes"],"pytorch_result")
+    add("relu_enabled",lambda r:int(r["relu_mask"])!=0,"configuration")
+    add("relu_disabled",lambda r:int(r["relu_mask"])==0,"configuration")
+    add("multiplier_positive",lambda r:any(v>0 for v in r["multiplier"]),"configuration")
+    add("multiplier_negative",lambda r:any(v<0 for v in r["multiplier"]),"configuration")
+    add("multiplier_unit",lambda r:any(v==1 for v in r["multiplier"]),"configuration")
+    add("multiplier_nonunit",lambda r:any(abs(v)!=1 for v in r["multiplier"]),"configuration")
+    add("shift_zero",lambda r:any(v==0 for v in r["shift"]),"configuration")
+    add("shift_nonzero",lambda r:any(v>0 for v in r["shift"]),"configuration")
+    add("shift_high",lambda r:any(v>=4 for v in r["shift"]),"configuration")
+    for label,predicate in (("zero",lambda v:v==0),("positive",lambda v:v>0),("negative",lambda v:v<0)):
+        add(f"bias_{label}",lambda r,p=predicate:any(p(v) for v in r["bias"]),"configuration")
+        add(f"input_zp_{label}",lambda r,p=predicate:p(int(r["input_zp"])),"configuration")
+        add(f"weight_zp_{label}",lambda r,p=predicate:any(p(v) for v in r["weight_zp"]),"configuration")
+        add(f"output_zp_{label}",lambda r,p=predicate:any(p(v) for v in r["output_zp"]),"configuration")
+    add("source_gap_none",lambda r:int(r["source_gap"])==0,"source_protocol")
+    add("source_gap_present",lambda r:int(r["source_gap"])>0,"source_protocol")
+    add("sink_stall_none",lambda r:int(r["sink_stall"])==0,"sink_protocol")
+    add("sink_stall_low",lambda r:1<=int(r["sink_stall"])<=3,"sink_protocol")
+    add("sink_stall_high",lambda r:int(r["sink_stall"])>=4,"sink_protocol")
+    add("bank_swap_absent",lambda r:int(r["bank_swap"])==0,"bank_sequence")
+    add("bank_swap_present",lambda r:int(r["bank_swap"])==1,"bank_sequence")
+    add("accumulator_small",lambda r:any(abs(v)<=127 for v in r["accumulator"]),"pytorch_accumulator")
+    add("accumulator_medium",lambda r:any(127<abs(v)<=32767 for v in r["accumulator"]),"pytorch_accumulator")
+    add("accumulator_large",lambda r:any(abs(v)>32767 for v in r["accumulator"]),"pytorch_accumulator")
+    add("product_positive",lambda r:any(v>0 for v in r["product"]),"pytorch_product")
+    add("product_negative",lambda r:any(v<0 for v in r["product"]),"pytorch_product")
+    add("round_exact",lambda r:any(s==0 or (abs(p)%(1<<s))==0 for p,s in zip(r["product"],r["shift"])),"requantization")
+    add("round_nonzero_remainder",lambda r:any(s>0 and (abs(p)%(1<<s))!=0 for p,s in zip(r["product"],r["shift"])),"requantization")
+    add("per_channel_quantization",lambda r:len(set(r["multiplier"]))>1 or len(set(r["weight_zp"]))>1,"configuration")
+    add("short_command",lambda r:int(r["k"])<=8,"command")
+    add("long_command",lambda r:int(r["k"])>=32,"command")
+    add("all_output_channels_active",lambda r:all(v!="zero" for v in r["result_classes"]),"pytorch_result")
+    assert len(bins)==64, len(bins)
 
-    inputs = values("input")
-    weights = values("weights")
-    biases = values("bias")
-    mults = values("multiplier")
-    shifts = values("shift")
-    result_classes = [json.loads(row["result_classes"]) for row in rows]
-
-    bins: list[tuple[str, bool, str]] = []
-    def add(name: str, predicate: bool, source: str) -> None:
-        bins.append((name, predicate, source))
-
-    families = ("directed", "cross", "random")
-    for family in families:
-        add(f"family_{family}", any(r["family"] == family for r in rows), "scenario_manifest")
-    for label, predicate in (
-        ("input_zero", lambda v: v == 0), ("input_positive", lambda v: v > 0),
-        ("input_negative", lambda v: v < 0), ("input_int8_min", lambda v: v == -128),
-        ("input_int8_max", lambda v: v == 127),
-    ):
-        add(label, any(predicate(v) for vector in inputs for v in vector), "input_tensor")
-    for label, predicate in (
-        ("weight_zero", lambda v: v == 0), ("weight_positive", lambda v: v > 0),
-        ("weight_negative", lambda v: v < 0), ("weight_int8_min", lambda v: v == -128),
-        ("weight_int8_max", lambda v: v == 127),
-    ):
-        add(label, any(predicate(v) for matrix in weights for v in matrix), "weight_tensor")
-    for result in ("positive", "negative", "zero", "sat_pos", "sat_neg", "relu_zero"):
-        add(f"result_{result}", any(result in classes for classes in result_classes), "pytorch_result")
-    add("relu_enabled", any(int(r["relu_mask"]) != 0 for r in rows), "configuration")
-    add("relu_disabled", any(int(r["relu_mask"]) == 0 for r in rows), "configuration")
-    add("unit_multiplier", any(1 in vector for vector in mults), "configuration")
-    add("scaled_multiplier", any(any(v != 1 for v in vector) for vector in mults), "configuration")
-    add("zero_shift", any(0 in vector for vector in shifts), "configuration")
-    add("nonzero_shift", any(any(v != 0 for v in vector) for vector in shifts), "configuration")
-    for label, predicate in (("bias_zero", lambda v: v == 0), ("bias_positive", lambda v: v > 0), ("bias_negative", lambda v: v < 0)):
-        add(label, any(predicate(v) for vector in biases for v in vector), "configuration")
-    add("source_gap", any(int(r["source_gap"]) > 0 for r in rows), "source_protocol")
-    add("sink_backpressure", any(int(r["sink_stall"]) > 0 for r in rows), "sink_protocol")
-    add("source_and_sink_pressure", any(int(r["source_gap"]) > 0 and int(r["sink_stall"]) > 0 for r in rows), "protocol_cross")
+    crosses=[]
+    def cross(name:str,predicate)->None:
+        contributors=[str(r["name"]) for r in parsed if predicate(r)]
+        crosses.append((name,bool(contributors),";".join(contributors[:8])))
     for channel in range(4):
-        add(f"output_channel_{channel}", any(classes[channel] != "zero" for classes in result_classes), "pytorch_result")
+        for result in ("positive","negative","zero","sat_pos","sat_neg","relu_zero"):
+            cross(f"channel_{channel}_x_{result}",lambda r,c=channel,v=result:r["result_classes"][c]==v)
+    for bank in (0,1):
+        for k in (4,8,16,32,64):
+            cross(f"bank_{bank}_x_k_{k}",lambda r,b=bank,k=k:int(r["bank"])==b and int(r["k"])==k)
+    for asymmetric in (0,1):
+        for relu in (0,1):
+            for saturated in (0,1):
+                cross(f"asym_{asymmetric}_x_relu_{relu}_x_sat_{saturated}",lambda r,a=asymmetric,re=relu,s=saturated:
+                      (int(int(r["input_zp"])!=0 or any(r["weight_zp"]) or any(r["output_zp"]))==a) and
+                      (int(int(r["relu_mask"])!=0)==re) and
+                      (int(any(v in ("sat_pos","sat_neg") for v in r["result_classes"]))==s))
+    pressure=lambda r:0 if int(r["sink_stall"])==0 else 1 if int(r["sink_stall"])<=3 else 2
+    for bucket in (0,1,2):
+        for swap in (0,1):
+            cross(f"pressure_{bucket}_x_bank_swap_{swap}",lambda r,b=bucket,s=swap:pressure(r)==b and int(r["bank_swap"])==s)
+    assert len(crosses)==48
 
-    coverage_path = ROOT / "reports" / "functional_coverage.csv"
-    with coverage_path.open("w", newline="") as handle:
-        writer = csv.writer(handle, lineterminator="\n")
-        writer.writerow(["bin", "status", "evidence"])
-        writer.writerows((name, "COVERED" if hit else "MISSING", source) for name, hit, source in bins)
-
-    crosses: list[tuple[str, bool, str]] = []
-    for channel in range(4):
-        for result in ("positive", "negative", "zero", "sat_pos", "sat_neg", "relu_zero"):
-            contributors = [r["name"] for r, classes in zip(rows, result_classes) if classes[channel] == result]
-            crosses.append((f"channel_{channel}_x_{result}", bool(contributors), ";".join(contributors)))
-    with (ROOT / "reports" / "cross_coverage.csv").open("w", newline="") as handle:
-        writer = csv.writer(handle, lineterminator="\n")
-        writer.writerow(["cross_bin", "status", "contributing_tests"])
-        writer.writerows((name, "COVERED" if hit else "MISSING", contributors) for name, hit, contributors in crosses)
-
-    feature_hit = sum(hit for _, hit, _ in bins)
-    cross_hit = sum(hit for _, hit, _ in crosses)
-    (ROOT / "docs" / "coverage.md").write_text(
-        "# Coverage\n\n"
-        f"- Feature coverage: **{feature_hit} / {len(bins)}**\n"
-        f"- Same-transaction channel/result crosses: **{cross_hit} / {len(crosses)}**\n"
-        "- Evidence is derived from the generated PyTorch scenario manifest and actual RTL comparison lane.\n"
-        "- These are project-defined functional metrics, not commercial simulator coverage signoff.\n\n"
-        "The cross model requires each output channel to independently produce positive, negative, zero, "
-        "positive saturation, negative saturation, and ReLU-clamped results.\n"
-    )
-    print(f"Functional coverage: {feature_hit} / {len(bins)}; crosses: {cross_hit} / {len(crosses)}")
-    return 0 if feature_hit == len(bins) and cross_hit == len(crosses) else 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+    with (ROOT/"reports"/"functional_coverage.csv").open("w",newline="") as handle:
+        writer=csv.writer(handle,lineterminator="\n"); writer.writerow(["bin","status","first_contributors","evidence"])
+        writer.writerows((n,"COVERED" if h else "MISSING",c,s) for n,h,c,s in bins)
+    with (ROOT/"reports"/"cross_coverage.csv").open("w",newline="") as handle:
+        writer=csv.writer(handle,lineterminator="\n"); writer.writerow(["cross_bin","status","contributing_tests"])
+        writer.writerows((n,"COVERED" if h else "MISSING",c) for n,h,c in crosses)
+    fh=sum(h for _,h,_,_ in bins); ch=sum(h for _,h,_ in crosses)
+    (ROOT/"docs"/"coverage.md").write_text(
+        f"# Coverage\n\n- Architectural feature coverage: **{fh} / {len(bins)}**\n"
+        f"- Same-workload interaction crosses: **{ch} / {len(crosses)}**\n"
+        "- Coverage is derived from PyTorch manifests that also execute against RTL.\n\n"
+        "The cross model correlates channel result classes, K and parameter bank, asymmetric quantization, "
+        "ReLU/saturation, output pressure, and bank swaps. These are project-defined metrics, not commercial signoff.\n")
+    print(f"Functional coverage: {fh} / {len(bins)}; crosses: {ch} / {len(crosses)}")
+    return 0 if fh==len(bins) and ch==len(crosses) else 1
+if __name__=="__main__": raise SystemExit(main())

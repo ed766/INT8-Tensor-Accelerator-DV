@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the back-to-back one-vector-per-cycle throughput test."""
+"""Run the back-to-back command/chunk throughput test."""
 
 from __future__ import annotations
 
@@ -28,8 +28,9 @@ def main() -> int:
     log = simulated.stdout + simulated.stderr
     (build / "simulation.log").write_text(log)
     passed = simulated.returncode == 0 and "STREAM_SUMMARY|status=PASS" in log
-    row = {"scenario": "back_to_back_identity", "vectors": 16, "acceptance_cycles": 16,
-           "vectors_per_cycle": "1.000", "status": "PASS" if passed else "FAIL"}
+    row = {"scenario": "back_to_back_k4_identity", "vectors": 16, "command_input_cycles": 32,
+           "vectors_per_cycle": "0.500", "active_macs_per_cycle": 16,
+           "status": "PASS" if passed else "FAIL"}
     with (ROOT / "reports" / "streaming_throughput.csv").open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(row), lineterminator="\n")
         writer.writeheader(); writer.writerow(row)

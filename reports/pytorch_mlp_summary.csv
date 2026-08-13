@@ -1,0 +1,2 @@
+model,samples,intermediate_words_checked,final_words_checked,top1_agreement,mean_absolute_error,maximum_absolute_error,status
+"Linear(16,4)-ReLU-Linear(4,4)",16,64,64,16 / 16,0.00285863,0.00865808,PASS

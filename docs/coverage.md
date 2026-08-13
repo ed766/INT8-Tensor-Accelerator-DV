@@ -1,8 +1,7 @@
 # Coverage
 
-- Feature coverage: **35 / 35**
-- Same-transaction channel/result crosses: **24 / 24**
-- Evidence is derived from the generated PyTorch scenario manifest and actual RTL comparison lane.
-- These are project-defined functional metrics, not commercial simulator coverage signoff.
+- Architectural feature coverage: **64 / 64**
+- Same-workload interaction crosses: **48 / 48**
+- Coverage is derived from PyTorch manifests that also execute against RTL.
 
-The cross model requires each output channel to independently produce positive, negative, zero, positive saturation, negative saturation, and ReLU-clamped results.
+The cross model correlates channel result classes, K and parameter bank, asymmetric quantization, ReLU/saturation, output pressure, and bank swaps. These are project-defined metrics, not commercial signoff.

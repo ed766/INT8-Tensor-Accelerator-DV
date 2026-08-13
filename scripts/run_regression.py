@@ -38,7 +38,7 @@ def main() -> int:
     if args.coverage:
         compile_command += ["--coverage-line", "--coverage-toggle"]
     if args.mutation:
-        compile_command.append(f"-D{args.mutation}")
+        compile_command += [f"-D{args.mutation}", "-DMUTATION_TEST"]
     compile_command += [
         str(ROOT / "rtl" / "int8_tensor_accel.sv"),
         str(ROOT / "sim" / "int8_accel_assertions.sv"),
@@ -51,7 +51,12 @@ def main() -> int:
         return compiled.returncode
 
     sim_command = [str(build / "obj" / "Vtb_int8_tensor_accel")]
-    simulated = subprocess.run(sim_command, cwd=build, check=False, text=True, capture_output=True)
+    try:
+        simulated = subprocess.run(sim_command, cwd=build, check=False, text=True,
+                                   capture_output=True, timeout=120)
+    except subprocess.TimeoutExpired as error:
+        (build / "simulation.log").write_text((error.stdout or "") + (error.stderr or "") + "\nTIMEOUT\n")
+        return 0 if args.expect_fail else 1
     log = simulated.stdout + simulated.stderr
     (build / "simulation.log").write_text(log)
     result_pattern = re.compile(
