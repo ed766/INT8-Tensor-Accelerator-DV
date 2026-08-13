@@ -7,7 +7,8 @@ ROOT=Path(__file__).resolve().parents[1]
 def find_sby()->str|None:
     direct=shutil.which("sby")
     if direct:return direct
-    candidates=[Path.home()/".cache"/"oss-cad-suite"/"bin"/"sby",
+    candidates=[Path(os.environ.get("OSS_CAD_SUITE", ""))/"bin"/"sby",
+                Path.home()/".cache"/"oss-cad-suite"/"bin"/"sby",
                 Path.home()/"ucie_chiplet_soc"/"chiplet_extension"/"build"/"external_riscv_tools"/"oss-cad-suite"/"oss-cad-suite"/"bin"/"sby"]
     return str(next((p for p in candidates if p.exists()),"")) or None
 def main()->int:
