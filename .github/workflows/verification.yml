@@ -16,7 +16,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y verilator yosys z3 make g++
-          python -m pip install numpy torch==2.7.1 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install click numpy
+          python -m pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cpu
           git clone https://github.com/YosysHQ/sby.git /tmp/sby
           git -C /tmp/sby checkout b1a1e98cba941ec8433f8dc27f416cd7bb7f14be
           sudo make -C /tmp/sby install PREFIX=/usr/local
