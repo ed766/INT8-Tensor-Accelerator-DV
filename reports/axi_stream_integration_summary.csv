@@ -1,0 +1,4 @@
+test,status,checks
+axi_wrapper,PASS,68
+record_decoder,PASS,7
+portable_accel_top,PASS,6

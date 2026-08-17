@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="360" viewBox="0 0 760 360">
+<rect width="100%" height="100%" fill="#f7f3e8"/>
+<text x="380.0" y="25" text-anchor="middle" font-family="DejaVu Sans" font-size="17" font-weight="bold">Warm RV32I-to-accelerator cycle speedup</text>
+<line x1="70" y1="45" x2="70" y2="305" stroke="#333"/><line x1="70" y1="305" x2="735" y2="305" stroke="#333"/>
+<circle cx="70.0" cy="94.3" r="3" fill="#007c91"/>
+<circle cx="101.7" cy="180.5" r="3" fill="#007c91"/>
+<circle cx="228.3" cy="138.9" r="3" fill="#007c91"/>
+<circle cx="735.0" cy="130.7" r="3" fill="#007c91"/>
+<polyline points="70.0,94.3 101.7,180.5 228.3,138.9 735.0,130.7" fill="none" stroke="#007c91" stroke-width="2"/>
+<text x="70" y="348" font-family="DejaVu Sans" font-size="12" fill="#007c91">K=4</text>
+<circle cx="70.0" cy="45.0" r="3" fill="#d6532f"/>
+<circle cx="101.7" cy="174.3" r="3" fill="#d6532f"/>
+<circle cx="228.3" cy="121.5" r="3" fill="#d6532f"/>
+<circle cx="735.0" cy="120.5" r="3" fill="#d6532f"/>
+<polyline points="70.0,45.0 101.7,174.3 228.3,121.5 735.0,120.5" fill="none" stroke="#d6532f" stroke-width="2"/>
+<text x="200" y="348" font-family="DejaVu Sans" font-size="12" fill="#d6532f">K=8</text>
+<circle cx="70.0" cy="211.5" r="3" fill="#486b35"/>
+<circle cx="101.7" cy="219.0" r="3" fill="#486b35"/>
+<circle cx="228.3" cy="219.5" r="3" fill="#486b35"/>
+<circle cx="735.0" cy="211.2" r="3" fill="#486b35"/>
+<polyline points="70.0,211.5 101.7,219.0 228.3,219.5 735.0,211.2" fill="none" stroke="#486b35" stroke-width="2"/>
+<text x="330" y="348" font-family="DejaVu Sans" font-size="12" fill="#486b35">K=16</text>
+<circle cx="70.0" cy="227.5" r="3" fill="#c28b16"/>
+<circle cx="101.7" cy="228.2" r="3" fill="#c28b16"/>
+<circle cx="228.3" cy="225.0" r="3" fill="#c28b16"/>
+<circle cx="735.0" cy="224.6" r="3" fill="#c28b16"/>
+<polyline points="70.0,227.5 101.7,228.2 228.3,225.0 735.0,224.6" fill="none" stroke="#c28b16" stroke-width="2"/>
+<text x="460" y="348" font-family="DejaVu Sans" font-size="12" fill="#c28b16">K=32</text>
+<circle cx="70.0" cy="233.0" r="3" fill="#725a9b"/>
+<circle cx="101.7" cy="225.3" r="3" fill="#725a9b"/>
+<circle cx="228.3" cy="228.2" r="3" fill="#725a9b"/>
+<circle cx="735.0" cy="229.1" r="3" fill="#725a9b"/>
+<polyline points="70.0,233.0 101.7,225.3 228.3,228.2 735.0,229.1" fill="none" stroke="#725a9b" stroke-width="2"/>
+<text x="590" y="348" font-family="DejaVu Sans" font-size="12" fill="#725a9b">K=64</text>
+<text x="70.0" y="323" text-anchor="middle" font-family="DejaVu Sans" font-size="11">1</text>
+<text x="101.7" y="323" text-anchor="middle" font-family="DejaVu Sans" font-size="11">4</text>
+<text x="228.3" y="323" text-anchor="middle" font-family="DejaVu Sans" font-size="11">16</text>
+<text x="735.0" y="323" text-anchor="middle" font-family="DejaVu Sans" font-size="11">64</text>
+<text x="380.0" y="332" text-anchor="middle" font-family="DejaVu Sans" font-size="12">Batch size</text><text transform="translate(18 180.0) rotate(-90)" text-anchor="middle" font-family="DejaVu Sans" font-size="12">Cycle speedup (x)</text></svg>

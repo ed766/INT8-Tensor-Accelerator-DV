@@ -1,0 +1,4 @@
+source_repository=../ucie_chiplet_soc
+source_commit=96ecbb1d572f001c1000beb6edf44b4cc6ebcec9
+rv32_core.sv=6e4e3a8edea01bb9bae53ecc28f186e712180738226cccdf430ff54f6b4b96b7
+rv32_rom_feeder.sv=018528b019d2119b42742664608098915f1b50c4040f460f00a9199677a6a80a

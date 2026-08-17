@@ -10,3 +10,6 @@
 - [Formal evidence](formal.md)
 - [Performance characterization](performance.md)
 - [Synthesis comparison](synthesis.md)
+- [Portable validation and FPGA readiness](fpga_readiness.md)
+- [AXI and packed-record integration](axi_integration.md)
+- [RV32I versus accelerator benchmark](rv32_accelerator_benchmark.md)

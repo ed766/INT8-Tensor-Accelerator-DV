@@ -8,12 +8,21 @@
 | `two_layer_mlp` | PASS | 64 intermediate + 64 final words |
 | `streaming_throughput` | 0.500 vectors/cycle | 16 K=4 commands; 16 active MACs/cycle |
 | `protocol_edge_checks` | 15 / 15 | Illegal command, bank isolation, FIFO pressure, and reset |
+| `portable_vector_checks` | 6 / 6 | Packed stream 3fb92dccd510 shared with future FPGA host |
+| `axi_stream_integration` | 3 / 3 | 81 AXI/decoder/end-to-end checks |
+| `axi_integration_coverage` | 17 / 17 | Event-derived AXI ordering, error, stream, decoder, and replay points |
 | `named_assertions` | 21 | Bound reusable SVA properties |
+| `portable_monitor_assertions` | 3 | Synthesizable monitor completion and backpressure properties |
+| `axi_wrapper_assertions` | 5 | AXI-Lite and AXI-Stream payload stability properties |
 | `rtl_mutations` | 9 / 9 | Expected defects detected |
 | `formal_groups` | 2 / 2 | Reduced-geometry safety and reachability |
 | `raw_line_coverage` | 159 / 173 (91.91%) | Verilator execution evidence |
 | `reviewed_line_coverage` | 159 / 159 (100.00%) | 14 explicit exclusions |
 | `raw_branch_coverage` | NA (Verilator 5.020 LCOV) | Verilator branch/expression proxy |
 | `yosys_synthesis` | PASS | 4x4 baseline: 10249 generic cells |
+| `rv32_accel_matrix` | 40 / 40 | GCC RV32I cold/warm cycle benchmark |
+| `rv32_accel_correctness` | 25 / 25 | Scalar and accelerator outputs match PyTorch |
+| `rv32_accel_backpressure` | 15 / 15 | Measured 0/25/75% output-stall cases |
+| `rv32_accel_mutations` | 5 / 5 | Benchmark checker sensitivity |
 
 All values are regenerated from checked-in CSV evidence by `make release-check`.

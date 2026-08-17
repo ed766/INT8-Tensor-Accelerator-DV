@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="360" viewBox="0 0 760 360">
+<rect width="100%" height="100%" fill="#f7f3e8"/>
+<text x="380.0" y="25" text-anchor="middle" font-family="DejaVu Sans" font-size="17" font-weight="bold">K=64 accelerator end-to-end cycles</text>
+<line x1="70" y1="45" x2="70" y2="305" stroke="#333"/><line x1="70" y1="305" x2="735" y2="305" stroke="#333"/>
+<circle cx="70.0" cy="280.2" r="3" fill="#007c91"/>
+<circle cx="101.7" cy="269.0" r="3" fill="#007c91"/>
+<circle cx="228.3" cy="225.0" r="3" fill="#007c91"/>
+<circle cx="735.0" cy="45.0" r="3" fill="#007c91"/>
+<polyline points="70.0,280.2 101.7,269.0 228.3,225.0 735.0,45.0" fill="none" stroke="#007c91" stroke-width="2"/>
+<text x="70" y="348" font-family="DejaVu Sans" font-size="12" fill="#007c91">cold</text>
+<circle cx="70.0" cy="301.2" r="3" fill="#d6532f"/>
+<circle cx="101.7" cy="290.0" r="3" fill="#d6532f"/>
+<circle cx="228.3" cy="246.0" r="3" fill="#d6532f"/>
+<circle cx="735.0" cy="66.1" r="3" fill="#d6532f"/>
+<polyline points="70.0,301.2 101.7,290.0 228.3,246.0 735.0,66.1" fill="none" stroke="#d6532f" stroke-width="2"/>
+<text x="200" y="348" font-family="DejaVu Sans" font-size="12" fill="#d6532f">warm</text>
+<text x="70.0" y="323" text-anchor="middle" font-family="DejaVu Sans" font-size="11">1</text>
+<text x="101.7" y="323" text-anchor="middle" font-family="DejaVu Sans" font-size="11">4</text>
+<text x="228.3" y="323" text-anchor="middle" font-family="DejaVu Sans" font-size="11">16</text>
+<text x="735.0" y="323" text-anchor="middle" font-family="DejaVu Sans" font-size="11">64</text>
+<text x="380.0" y="332" text-anchor="middle" font-family="DejaVu Sans" font-size="12">Batch size</text><text transform="translate(18 180.0) rotate(-90)" text-anchor="middle" font-family="DejaVu Sans" font-size="12">Simulated cycles</text></svg>

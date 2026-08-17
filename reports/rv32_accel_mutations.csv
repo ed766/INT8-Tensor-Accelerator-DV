@@ -1,0 +1,6 @@
+mutation,expected,observed,status,bucket
+drop_chunk,FAIL,FAIL,PASS,timeout_or_assertion
+dup_command,FAIL,FAIL,PASS,numerical_or_accounting
+corrupt_result,FAIL,FAIL,PASS,numerical_or_accounting
+scalar_round,FAIL,FAIL,PASS,numerical_or_accounting
+freeze_latency,FAIL,FAIL,PASS,numerical_or_accounting
