@@ -6,11 +6,14 @@ from __future__ import annotations
 import csv
 import json
 import re
+import statistics
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 START = "<!-- BEGIN GENERATED METRICS -->"
 END = "<!-- END GENERATED METRICS -->"
+DASHBOARD_START = "<!-- BEGIN GENERATED BENCHMARK DASHBOARD -->"
+DASHBOARD_END = "<!-- END GENERATED BENCHMARK DASHBOARD -->"
 
 
 def rows(path: str) -> list[dict[str, str]]:
@@ -109,6 +112,42 @@ def main() -> int:
     text = readme.read_text()
     replacement = "\n".join(table)
     text = re.sub(re.escape(START) + r".*?" + re.escape(END), replacement, text, flags=re.DOTALL)
+    if benchmark:
+        cold = [float(row["end_to_end_speedup"]) for row in benchmark if row["mode"] == "cold"]
+        warm = [float(row["end_to_end_speedup"]) for row in benchmark if row["mode"] == "warm"]
+        compute = [float(row["compute_speedup"]) for row in benchmark]
+        warm_break_even = {
+            int(row["k"]): min(
+                int(candidate["batch"])
+                for candidate in benchmark
+                if candidate["mode"] == "warm"
+                and candidate["k"] == row["k"]
+                and float(candidate["end_to_end_speedup"]) > 1.0
+            )
+            for row in benchmark
+            if row["mode"] == "warm"
+        }
+        break_even_text = ", ".join(f"K={k}: batch {batch}" for k, batch in sorted(warm_break_even.items()))
+        dashboard = [
+            DASHBOARD_START,
+            "| Measured comparison | Result |",
+            "| --- | ---: |",
+            f"| Cold end-to-end speedup | `{min(cold):.2f}x - {max(cold):.2f}x` |",
+            f"| Warm end-to-end speedup | `{min(warm):.2f}x - {max(warm):.2f}x` |",
+            f"| Compute-only speedup | `{min(compute):.2f}x - {max(compute):.2f}x` |",
+            f"| Median cold / warm speedup | `{statistics.median(cold):.2f}x / {statistics.median(warm):.2f}x` |",
+            f"| First measured warm break-even | `{break_even_text}` |",
+            f"| Evidence matrix | `{sum(row['status'] == 'PASS' for row in benchmark)} / {len(benchmark)}` benchmark, "
+            f"`{sum(row['status'] == 'PASS' for row in benchmark_correct)} / {len(benchmark_correct)}` correctness, "
+            f"`{sum(row['status'] == 'PASS' for row in benchmark_pressure)} / {len(benchmark_pressure)}` backpressure |",
+            DASHBOARD_END,
+        ]
+        text = re.sub(
+            re.escape(DASHBOARD_START) + r".*?" + re.escape(DASHBOARD_END),
+            "\n".join(dashboard),
+            text,
+            flags=re.DOTALL,
+        )
     readme.write_text(text)
     metric_lines = ["# Project Metrics", "", "| Metric | Value | Interpretation |", "| --- | ---: | --- |"]
     metric_lines.extend(f"| `{key}` | {value} | {note} |" for key, value, note in metrics)

@@ -54,7 +54,29 @@ The checked-in evidence closes `40 / 40` cold/warm geometry points, `25 / 25`
 operand-pattern checks, `15 / 15` backpressure cases, and `5 / 5` expected-fail
 mutations. See the [measured benchmark summary](reports/rv32_accel_benchmark_summary.md).
 
-![Measured RV32I-to-accelerator speedup](docs/images/rv32_accel_speedup.svg)
+### Measured Dashboard
+
+<!-- BEGIN GENERATED BENCHMARK DASHBOARD -->
+| Measured comparison | Result |
+| --- | ---: |
+| Cold end-to-end speedup | `8.68x - 122.57x` |
+| Warm end-to-end speedup | `56.37x - 203.55x` |
+| Compute-only speedup | `58.63x - 459.79x` |
+| Median cold / warm speedup | `38.13x / 70.29x` |
+| First measured warm break-even | `K=4: batch 1, K=8: batch 1, K=16: batch 1, K=32: batch 1, K=64: batch 1` |
+| Evidence matrix | `40 / 40` benchmark, `25 / 25` correctness, `15 / 15` backpressure |
+<!-- END GENERATED BENCHMARK DASHBOARD -->
+
+| RV32I versus accelerator speedup | K=64 cold versus warm latency |
+| --- | --- |
+| ![Measured RV32I-to-accelerator speedup](docs/images/rv32_accel_speedup.svg) | ![Measured K=64 accelerator latency](docs/images/rv32_accel_latency.svg) |
+| Warm break-even batch | Firmware-to-accelerator event timeline |
+| ![Measured warm break-even batch](docs/images/rv32_accel_break_even.svg) | ![Measured firmware and accelerator timeline](docs/images/rv32_accel_waveform.svg) |
+
+The dashboard is generated from passing behavioral Verilator rows. Review the
+[complete 40-row cycle matrix](reports/rv32_accel_benchmark.csv),
+[phase breakdown and methodology](reports/rv32_accel_benchmark_summary.md), and
+[backpressure results](reports/rv32_accel_backpressure.csv) for the underlying evidence.
 
 ## Architecture
 
