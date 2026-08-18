@@ -1,6 +1,6 @@
 {
   "schema": "int8-fx-compiler-v1",
-  "torch_version": "2.7.1+cu126",
+  "torch_version": "2.7.1",
   "graphs": [
     {
       "name": "fx_graph_00",
@@ -595,5 +595,5 @@
     }
   ],
   "unsupported_sigmoid_rejected": true,
-  "artifact_sha256": "1b01ac62c9143e26f219d860839fc46f366d49b81aedcd61dab776f303e204b3"
+  "artifact_sha256": "a27874b0725d8cd68c3130777bda4cd85e3850eb4c36e3802a44ed562e09392d"
 }

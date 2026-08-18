@@ -194,7 +194,8 @@ def main() -> int:
     emit_sv(programs, ROOT / "build" / "generated_fx_graphs.svh")
     manifest = {
         "schema": "int8-fx-compiler-v1",
-        "torch_version": torch.__version__,
+        # Wheel build suffixes (+cpu, +cu126) do not affect FX graph semantics.
+        "torch_version": torch.__version__.split("+", 1)[0],
         "graphs": [
             {
                 "name": p.name,
