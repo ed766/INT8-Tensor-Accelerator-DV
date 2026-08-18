@@ -1,0 +1,599 @@
+{
+  "schema": "int8-fx-compiler-v1",
+  "torch_version": "2.7.1+cu126",
+  "graphs": [
+    {
+      "name": "fx_graph_00",
+      "seed": 4100,
+      "input_k": 4,
+      "nodes": [
+        "placeholder:input",
+        "call_module:0",
+        "call_module:1",
+        "output:output"
+      ],
+      "layers": [
+        {
+          "name": "0",
+          "k": 4,
+          "relu": true,
+          "shift": 8,
+          "parameter_bank": 0
+        }
+      ],
+      "samples": 4,
+      "float_mae": 0.0029055981431156397
+    },
+    {
+      "name": "fx_graph_01",
+      "seed": 4101,
+      "input_k": 8,
+      "nodes": [
+        "placeholder:input",
+        "call_module:0",
+        "call_module:1",
+        "call_module:2",
+        "output:output"
+      ],
+      "layers": [
+        {
+          "name": "0",
+          "k": 8,
+          "relu": false,
+          "shift": 8,
+          "parameter_bank": 0
+        },
+        {
+          "name": "1",
+          "k": 4,
+          "relu": true,
+          "shift": 7,
+          "parameter_bank": 1
+        }
+      ],
+      "samples": 4,
+      "float_mae": 0.0012930594384670258
+    },
+    {
+      "name": "fx_graph_02",
+      "seed": 4102,
+      "input_k": 16,
+      "nodes": [
+        "placeholder:input",
+        "call_module:0",
+        "call_module:1",
+        "call_module:2",
+        "call_module:3",
+        "call_module:4",
+        "output:output"
+      ],
+      "layers": [
+        {
+          "name": "0",
+          "k": 16,
+          "relu": true,
+          "shift": 8,
+          "parameter_bank": 0
+        },
+        {
+          "name": "2",
+          "k": 4,
+          "relu": true,
+          "shift": 8,
+          "parameter_bank": 1
+        },
+        {
+          "name": "4",
+          "k": 4,
+          "relu": false,
+          "shift": 7,
+          "parameter_bank": 0
+        }
+      ],
+      "samples": 4,
+      "float_mae": 0.0018585819052532315
+    },
+    {
+      "name": "fx_graph_03",
+      "seed": 4103,
+      "input_k": 4,
+      "nodes": [
+        "placeholder:input",
+        "call_module:0",
+        "output:output"
+      ],
+      "layers": [
+        {
+          "name": "0",
+          "k": 4,
+          "relu": false,
+          "shift": 8,
+          "parameter_bank": 0
+        }
+      ],
+      "samples": 4,
+      "float_mae": 0.003936619032174349
+    },
+    {
+      "name": "fx_graph_04",
+      "seed": 4104,
+      "input_k": 8,
+      "nodes": [
+        "placeholder:input",
+        "call_module:0",
+        "call_module:1",
+        "call_module:2",
+        "output:output"
+      ],
+      "layers": [
+        {
+          "name": "0",
+          "k": 8,
+          "relu": true,
+          "shift": 8,
+          "parameter_bank": 0
+        },
+        {
+          "name": "2",
+          "k": 4,
+          "relu": false,
+          "shift": 8,
+          "parameter_bank": 1
+        }
+      ],
+      "samples": 4,
+      "float_mae": 0.005489778704941273
+    },
+    {
+      "name": "fx_graph_05",
+      "seed": 4105,
+      "input_k": 16,
+      "nodes": [
+        "placeholder:input",
+        "call_module:0",
+        "call_module:1",
+        "call_module:2",
+        "call_module:3",
+        "output:output"
+      ],
+      "layers": [
+        {
+          "name": "0",
+          "k": 16,
+          "relu": false,
+          "shift": 8,
+          "parameter_bank": 0
+        },
+        {
+          "name": "1",
+          "k": 4,
+          "relu": true,
+          "shift": 7,
+          "parameter_bank": 1
+        },
+        {
+          "name": "3",
+          "k": 4,
+          "relu": false,
+          "shift": 7,
+          "parameter_bank": 0
+        }
+      ],
+      "samples": 4,
+      "float_mae": 0.0016425030771642923
+    },
+    {
+      "name": "fx_graph_06",
+      "seed": 4106,
+      "input_k": 4,
+      "nodes": [
+        "placeholder:input",
+        "call_module:0",
+        "call_module:1",
+        "output:output"
+      ],
+      "layers": [
+        {
+          "name": "0",
+          "k": 4,
+          "relu": true,
+          "shift": 7,
+          "parameter_bank": 0
+        }
+      ],
+      "samples": 4,
+      "float_mae": 0.0013852063566446304
+    },
+    {
+      "name": "fx_graph_07",
+      "seed": 4107,
+      "input_k": 8,
+      "nodes": [
+        "placeholder:input",
+        "call_module:0",
+        "call_module:1",
+        "output:output"
+      ],
+      "layers": [
+        {
+          "name": "0",
+          "k": 8,
+          "relu": false,
+          "shift": 8,
+          "parameter_bank": 0
+        },
+        {
+          "name": "1",
+          "k": 4,
+          "relu": false,
+          "shift": 8,
+          "parameter_bank": 1
+        }
+      ],
+      "samples": 4,
+      "float_mae": 0.00455109216272831
+    },
+    {
+      "name": "fx_graph_08",
+      "seed": 4108,
+      "input_k": 16,
+      "nodes": [
+        "placeholder:input",
+        "call_module:0",
+        "call_module:1",
+        "call_module:2",
+        "call_module:3",
+        "output:output"
+      ],
+      "layers": [
+        {
+          "name": "0",
+          "k": 16,
+          "relu": true,
+          "shift": 8,
+          "parameter_bank": 0
+        },
+        {
+          "name": "2",
+          "k": 4,
+          "relu": false,
+          "shift": 7,
+          "parameter_bank": 1
+        },
+        {
+          "name": "3",
+          "k": 4,
+          "relu": false,
+          "shift": 8,
+          "parameter_bank": 0
+        }
+      ],
+      "samples": 4,
+      "float_mae": 0.0033151344396173954
+    },
+    {
+      "name": "fx_graph_09",
+      "seed": 4109,
+      "input_k": 4,
+      "nodes": [
+        "placeholder:input",
+        "call_module:0",
+        "output:output"
+      ],
+      "layers": [
+        {
+          "name": "0",
+          "k": 4,
+          "relu": false,
+          "shift": 7,
+          "parameter_bank": 0
+        }
+      ],
+      "samples": 4,
+      "float_mae": 0.0025972360745072365
+    },
+    {
+      "name": "fx_graph_10",
+      "seed": 4110,
+      "input_k": 8,
+      "nodes": [
+        "placeholder:input",
+        "call_module:0",
+        "call_module:1",
+        "call_module:2",
+        "call_module:3",
+        "output:output"
+      ],
+      "layers": [
+        {
+          "name": "0",
+          "k": 8,
+          "relu": true,
+          "shift": 8,
+          "parameter_bank": 0
+        },
+        {
+          "name": "2",
+          "k": 4,
+          "relu": true,
+          "shift": 7,
+          "parameter_bank": 1
+        }
+      ],
+      "samples": 4,
+      "float_mae": 0.0027800556272268295
+    },
+    {
+      "name": "fx_graph_11",
+      "seed": 4111,
+      "input_k": 16,
+      "nodes": [
+        "placeholder:input",
+        "call_module:0",
+        "call_module:1",
+        "call_module:2",
+        "output:output"
+      ],
+      "layers": [
+        {
+          "name": "0",
+          "k": 16,
+          "relu": false,
+          "shift": 9,
+          "parameter_bank": 0
+        },
+        {
+          "name": "1",
+          "k": 4,
+          "relu": false,
+          "shift": 6,
+          "parameter_bank": 1
+        },
+        {
+          "name": "2",
+          "k": 4,
+          "relu": false,
+          "shift": 8,
+          "parameter_bank": 0
+        }
+      ],
+      "samples": 4,
+      "float_mae": 0.004816215485334396
+    },
+    {
+      "name": "fx_graph_12",
+      "seed": 4112,
+      "input_k": 4,
+      "nodes": [
+        "placeholder:input",
+        "call_module:0",
+        "call_module:1",
+        "output:output"
+      ],
+      "layers": [
+        {
+          "name": "0",
+          "k": 4,
+          "relu": true,
+          "shift": 8,
+          "parameter_bank": 0
+        }
+      ],
+      "samples": 4,
+      "float_mae": 0.0025877906009554863
+    },
+    {
+      "name": "fx_graph_13",
+      "seed": 4113,
+      "input_k": 8,
+      "nodes": [
+        "placeholder:input",
+        "call_module:0",
+        "call_module:1",
+        "call_module:2",
+        "output:output"
+      ],
+      "layers": [
+        {
+          "name": "0",
+          "k": 8,
+          "relu": false,
+          "shift": 8,
+          "parameter_bank": 0
+        },
+        {
+          "name": "1",
+          "k": 4,
+          "relu": true,
+          "shift": 7,
+          "parameter_bank": 1
+        }
+      ],
+      "samples": 4,
+      "float_mae": 0.00033887196332216263
+    },
+    {
+      "name": "fx_graph_14",
+      "seed": 4114,
+      "input_k": 16,
+      "nodes": [
+        "placeholder:input",
+        "call_module:0",
+        "call_module:1",
+        "call_module:2",
+        "call_module:3",
+        "call_module:4",
+        "call_module:5",
+        "output:output"
+      ],
+      "layers": [
+        {
+          "name": "0",
+          "k": 16,
+          "relu": true,
+          "shift": 8,
+          "parameter_bank": 0
+        },
+        {
+          "name": "2",
+          "k": 4,
+          "relu": true,
+          "shift": 7,
+          "parameter_bank": 1
+        },
+        {
+          "name": "4",
+          "k": 4,
+          "relu": true,
+          "shift": 8,
+          "parameter_bank": 0
+        }
+      ],
+      "samples": 4,
+      "float_mae": 0.0002124672755599022
+    },
+    {
+      "name": "fx_graph_15",
+      "seed": 4115,
+      "input_k": 4,
+      "nodes": [
+        "placeholder:input",
+        "call_module:0",
+        "output:output"
+      ],
+      "layers": [
+        {
+          "name": "0",
+          "k": 4,
+          "relu": false,
+          "shift": 8,
+          "parameter_bank": 0
+        }
+      ],
+      "samples": 4,
+      "float_mae": 0.005351791623979807
+    },
+    {
+      "name": "fx_graph_16",
+      "seed": 4116,
+      "input_k": 8,
+      "nodes": [
+        "placeholder:input",
+        "call_module:0",
+        "call_module:1",
+        "call_module:2",
+        "output:output"
+      ],
+      "layers": [
+        {
+          "name": "0",
+          "k": 8,
+          "relu": true,
+          "shift": 8,
+          "parameter_bank": 0
+        },
+        {
+          "name": "2",
+          "k": 4,
+          "relu": false,
+          "shift": 7,
+          "parameter_bank": 1
+        }
+      ],
+      "samples": 4,
+      "float_mae": 0.0029777726158499718
+    },
+    {
+      "name": "fx_graph_17",
+      "seed": 4117,
+      "input_k": 16,
+      "nodes": [
+        "placeholder:input",
+        "call_module:0",
+        "call_module:1",
+        "call_module:2",
+        "call_module:3",
+        "call_module:4",
+        "output:output"
+      ],
+      "layers": [
+        {
+          "name": "0",
+          "k": 16,
+          "relu": false,
+          "shift": 8,
+          "parameter_bank": 0
+        },
+        {
+          "name": "1",
+          "k": 4,
+          "relu": true,
+          "shift": 8,
+          "parameter_bank": 1
+        },
+        {
+          "name": "3",
+          "k": 4,
+          "relu": true,
+          "shift": 7,
+          "parameter_bank": 0
+        }
+      ],
+      "samples": 4,
+      "float_mae": 0.0012548567028716207
+    },
+    {
+      "name": "fx_graph_18",
+      "seed": 4118,
+      "input_k": 4,
+      "nodes": [
+        "placeholder:input",
+        "call_module:0",
+        "call_module:1",
+        "output:output"
+      ],
+      "layers": [
+        {
+          "name": "0",
+          "k": 4,
+          "relu": true,
+          "shift": 7,
+          "parameter_bank": 0
+        }
+      ],
+      "samples": 4,
+      "float_mae": 0.0016255041118711233
+    },
+    {
+      "name": "fx_graph_19",
+      "seed": 4119,
+      "input_k": 8,
+      "nodes": [
+        "placeholder:input",
+        "call_module:0",
+        "call_module:1",
+        "output:output"
+      ],
+      "layers": [
+        {
+          "name": "0",
+          "k": 8,
+          "relu": false,
+          "shift": 8,
+          "parameter_bank": 0
+        },
+        {
+          "name": "1",
+          "k": 4,
+          "relu": false,
+          "shift": 8,
+          "parameter_bank": 1
+        }
+      ],
+      "samples": 4,
+      "float_mae": 0.003506432054564357
+    }
+  ],
+  "unsupported_sigmoid_rejected": true,
+  "artifact_sha256": "1b01ac62c9143e26f219d860839fc46f366d49b81aedcd61dab776f303e204b3"
+}

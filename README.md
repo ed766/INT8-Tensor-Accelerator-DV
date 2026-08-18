@@ -35,9 +35,12 @@ This project is the portfolio's ML/datapath example. It shows how a PyTorch mode
 | RV32I/accelerator correctness | `25 / 25` |
 | RV32I/accelerator backpressure | `15 / 15` |
 | RV32I benchmark mutations | `5 / 5` |
+| PyTorch FX graphs compiled | `20 / 20` |
+| FX graph RTL execution | `PASS` |
+| FX compiler coverage | `10 / 10` |
 <!-- END GENERATED METRICS -->
 
-See [project metrics](docs/project_metrics.md), the [verification plan](docs/verification_plan.md), and the [two-layer PyTorch demonstration](docs/pytorch_mlp_demo.md).
+See [project metrics](docs/project_metrics.md), the [verification plan](docs/verification_plan.md), the [FX graph compiler](docs/fx_graph_compiler.md), and the [two-layer PyTorch demonstration](docs/pytorch_mlp_demo.md).
 
 ## RV32I Hardware/Software Benchmark
 
@@ -98,7 +101,7 @@ The exact behavior is defined in the [numerical contract](docs/numerical_contrac
 2. The independent model predicts adjusted operands, INT32 accumulators, signed rounded requantization, and final INT8 outputs.
 3. The SystemVerilog bench loads either parameter bank, issues a tagged command, and streams every activation chunk.
 4. Every RTL result word and tag is compared exactly; floating-point tolerance is never used for RTL checking.
-5. A two-layer `Linear(16,4)-ReLU-Linear(4,4)` model feeds RTL-observed hidden activations into the second RTL layer.
+5. A `torch.fx` compiler validates supported graphs, quantizes one-to-three-layer `Linear`/`ReLU` networks, schedules parameter banks, and checks every RTL-observed intermediate and final word.
 6. Assertions, protocol-edge tests, functional/cross coverage, RTL mutations, bounded formal checks, code coverage, performance, and synthesis reports are regenerated.
 7. A packed transaction stream and synthesizable health monitor provide the same command/result contract for simulation now and a future FPGA host later.
 
@@ -109,6 +112,7 @@ make project-check PYTHON=/path/to/pytorch/python
 make release-check PYTHON=/path/to/pytorch/python
 make portable-check # packed records plus a synthesizable protocol/performance monitor
 make axi-integration-check # AXI-Lite, AXI-Stream, decoder, and end-to-end transport checks
+make fx-compiler-check # torch.fx graph validation, compilation, bank scheduling, and RTL execution
 make rv32-benchmark-smoke # GCC firmware, RV32I, APB/AXI, stream, and PyTorch check
 make rv32-benchmark-release-check # optional 40+25+15 matrix and mutations
 ```
@@ -117,6 +121,7 @@ High-signal evidence:
 
 - [PyTorch/RTL comparison](reports/rtl_vs_pytorch_summary.csv)
 - [Two-layer RTL chain](reports/pytorch_mlp_rtl_summary.csv)
+- [PyTorch FX compiler and RTL execution](docs/fx_graph_compiler.md)
 - [Functional coverage](reports/functional_coverage.csv)
 - [Interaction crosses](reports/cross_coverage.csv)
 - [RTL mutation sensitivity](reports/mutation_summary.csv)

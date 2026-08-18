@@ -1,0 +1,2 @@
+scenario,graphs,samples,commands,words_checked,failures,bank_swaps,status
+torch_fx_graph_matrix,20,80,156,624,0,103,PASS

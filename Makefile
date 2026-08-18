@@ -1,7 +1,7 @@
 PYTHON ?= $(shell if python3 -c 'import torch' >/dev/null 2>&1; then command -v python3; elif [ -x ../rl-venv/bin/python ]; then printf '%s' ../rl-venv/bin/python; else command -v python3; fi)
 VERILATOR ?= verilator
 
-.PHONY: vectors portable-vectors portable-check axi-integration-check model-selftest linear-demo mlp-demo lint regress streaming-check protocol-edges coverage code-coverage mutation-check formal-check performance-report synth-check docs-check project-check release-check rv32-benchmark-toolchain-check rv32-benchmark-build rv32-benchmark-smoke rv32-benchmark-check rv32-benchmark-sweep rv32-benchmark-backpressure rv32-benchmark-mutations rv32-benchmark-report rv32-benchmark-waveform rv32-benchmark-release-check clean
+.PHONY: vectors portable-vectors portable-check axi-integration-check model-selftest linear-demo mlp-demo fx-compiler-check lint regress streaming-check protocol-edges coverage code-coverage mutation-check formal-check performance-report synth-check docs-check project-check release-check rv32-benchmark-toolchain-check rv32-benchmark-build rv32-benchmark-smoke rv32-benchmark-check rv32-benchmark-sweep rv32-benchmark-backpressure rv32-benchmark-mutations rv32-benchmark-report rv32-benchmark-waveform rv32-benchmark-release-check clean
 
 vectors:
 	$(PYTHON) scripts/generate_vectors.py
@@ -24,6 +24,9 @@ linear-demo:
 mlp-demo:
 	$(PYTHON) scripts/pytorch_mlp_demo.py
 	$(PYTHON) scripts/run_mlp_demo.py
+
+fx-compiler-check:
+	$(PYTHON) scripts/run_fx_graphs.py
 
 lint:
 	$(VERILATOR) --lint-only --timing --assert -Wall -Wno-SYNCASYNCNET --top-module int8_tensor_accel rtl/int8_tensor_accel.sv sim/int8_accel_assertions.sv
@@ -98,7 +101,7 @@ docs-check:
 
 project-check: model-selftest linear-demo vectors mlp-demo lint regress streaming-check protocol-edges portable-check axi-integration-check coverage performance-report
 
-release-check: project-check mutation-check formal-check code-coverage synth-check
+release-check: project-check fx-compiler-check mutation-check formal-check code-coverage synth-check
 	$(PYTHON) scripts/generate_metrics.py
 	$(PYTHON) scripts/check_docs.py
 	git diff --check

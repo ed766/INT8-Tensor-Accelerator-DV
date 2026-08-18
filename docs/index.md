@@ -3,6 +3,7 @@
 - [Project metrics](project_metrics.md)
 - [Numerical and command contract](numerical_contract.md)
 - [Two-layer PyTorch/RTL demo](pytorch_mlp_demo.md)
+- [PyTorch FX graph compiler](fx_graph_compiler.md)
 - [Verification plan](verification_plan.md)
 - [Coverage](coverage.md)
 - [Code coverage](code_coverage.md)

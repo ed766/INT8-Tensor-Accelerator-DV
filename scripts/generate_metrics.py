@@ -46,6 +46,9 @@ def main() -> int:
     benchmark_correct = rows("reports/rv32_accel_correctness.csv") if (ROOT / "reports/rv32_accel_correctness.csv").exists() else []
     benchmark_pressure = rows("reports/rv32_accel_backpressure.csv") if (ROOT / "reports/rv32_accel_backpressure.csv").exists() else []
     benchmark_mutations = rows("reports/rv32_accel_mutations.csv") if (ROOT / "reports/rv32_accel_mutations.csv").exists() else []
+    fx_compile = rows("reports/fx_compile_summary.csv") if (ROOT / "reports/fx_compile_summary.csv").exists() else []
+    fx_rtl = rows("reports/fx_rtl_summary.csv") if (ROOT / "reports/fx_rtl_summary.csv").exists() else []
+    fx_coverage = rows("reports/fx_coverage.csv") if (ROOT / "reports/fx_coverage.csv").exists() else []
     branch_value = (
         f"{code['branch_hit']} / {code['branch_total']} ({code['branch_percent']}%)"
         if code["branch_percent"] != "NA" else "NA (Verilator 5.020 LCOV)"
@@ -77,6 +80,12 @@ def main() -> int:
             ("rv32_accel_backpressure", f"{sum(r['status'] == 'PASS' for r in benchmark_pressure)} / {len(benchmark_pressure)}", "Measured 0/25/75% output-stall cases"),
             ("rv32_accel_mutations", f"{sum(r['status'] == 'PASS' for r in benchmark_mutations)} / {len(benchmark_mutations)}", "Benchmark checker sensitivity"),
         ])
+    if fx_compile:
+        metrics.extend([
+            ("fx_graph_compilation", f"{sum(r['status'] == 'PASS' for r in fx_compile)} / {len(fx_compile)}", "torch.fx Linear/ReLU graphs compiled"),
+            ("fx_rtl_execution", fx_rtl[0]["status"], f"{fx_rtl[0]['words_checked']} intermediate/final words checked"),
+            ("fx_compiler_coverage", f"{sum(r['status'] == 'COVERED' for r in fx_coverage)} / {len(fx_coverage)}", "Depth, K, activation, bank-reuse, and rejection points"),
+        ])
     with (ROOT / "reports" / "project_metrics.csv").open("w", newline="") as handle:
         writer = csv.writer(handle, lineterminator="\n")
         writer.writerow(["metric", "value", "note"])
@@ -105,6 +114,9 @@ def main() -> int:
         "rv32_accel_correctness": "RV32I/accelerator correctness",
         "rv32_accel_backpressure": "RV32I/accelerator backpressure",
         "rv32_accel_mutations": "RV32I benchmark mutations",
+        "fx_graph_compilation": "PyTorch FX graphs compiled",
+        "fx_rtl_execution": "FX graph RTL execution",
+        "fx_compiler_coverage": "FX compiler coverage",
     }
     table.extend(f"| {labels[key]} | `{value}` |" for key, value, _ in metrics)
     table.append(END)

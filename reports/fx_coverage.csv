@@ -1,0 +1,11 @@
+coverage_point,status
+graph_depth_1,COVERED
+graph_depth_2,COVERED
+graph_depth_3,COVERED
+input_k_4,COVERED
+input_k_8,COVERED
+input_k_16,COVERED
+relu_fused,COVERED
+linear_without_relu,COVERED
+parameter_bank_reuse,COVERED
+unsupported_operator_rejected,COVERED

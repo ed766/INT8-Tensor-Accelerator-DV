@@ -24,5 +24,8 @@
 | `rv32_accel_correctness` | 25 / 25 | Scalar and accelerator outputs match PyTorch |
 | `rv32_accel_backpressure` | 15 / 15 | Measured 0/25/75% output-stall cases |
 | `rv32_accel_mutations` | 5 / 5 | Benchmark checker sensitivity |
+| `fx_graph_compilation` | 20 / 20 | torch.fx Linear/ReLU graphs compiled |
+| `fx_rtl_execution` | PASS | 624 intermediate/final words checked |
+| `fx_compiler_coverage` | 10 / 10 | Depth, K, activation, bank-reuse, and rejection points |
 
 All values are regenerated from checked-in CSV evidence by `make release-check`.
