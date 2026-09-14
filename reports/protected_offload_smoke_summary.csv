@@ -1,0 +1,2 @@
+name,status,failure,k,batch,bp_pct,fault,pattern,comp_stall,asid,qos,cycles,job_cycles,reads,writes,translations,stalls,irq_cycles,trace
+smoke,PASS,,16,2,25,0,,,,,684,148,8,2,10,5,45,build/protected_offload/events/smoke.csv

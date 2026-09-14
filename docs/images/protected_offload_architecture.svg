@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">Protected accelerator offload architecture</title>
+  <desc id="desc">APB descriptor programming drives a protected DMA through translation and memory boundaries into the INT8 accelerator.</desc>
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#071b2a"/><stop offset="1" stop-color="#123946"/></linearGradient><marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0 0L10 4L0 8z" fill="#70d6c5"/></marker><style>.box{fill:#102b3a;stroke:#70d6c5;stroke-width:2;rx:14}.accent{fill:#173f4a;stroke:#f4c95d;stroke-width:2;rx:14}.t{font:600 18px Georgia,serif;fill:#f5f1e8;text-anchor:middle}.s{font:14px Georgia,serif;fill:#b9d8d5;text-anchor:middle}.line{stroke:#70d6c5;stroke-width:3;fill:none;marker-end:url(#arrow)}.dash{stroke:#f4c95d;stroke-width:2;stroke-dasharray:7 7;fill:none;marker-end:url(#arrow)}</style></defs>
+  <rect width="1200" height="520" rx="24" fill="url(#bg)"/>
+  <text x="600" y="42" class="t" font-size="25">Firmware-Visible Protected INT8 Offload</text>
+  <rect class="box" x="40" y="90" width="190" height="105"/><text class="t" x="135" y="125">RV32 / APB</text><text class="s" x="135" y="151">descriptor staging</text><text class="s" x="135" y="173">completion + IRQ</text>
+  <rect class="accent" x="285" y="80" width="225" height="125"/><text class="t" x="397" y="118">Descriptor DMA</text><text class="s" x="397" y="145">4 submit + 4 completion</text><text class="s" x="397" y="168">ASID, QoS, bank generation</text><text class="s" x="397" y="190">prefetch before command</text>
+  <rect class="box" x="565" y="90" width="180" height="105"/><text class="t" x="655" y="125">Translation</text><text class="s" x="655" y="151">IOVA + ASID</text><text class="s" x="655" y="173">permissions + TLB</text>
+  <rect class="box" x="800" y="90" width="180" height="105"/><text class="t" x="890" y="125">64-bit AXI</text><text class="s" x="890" y="151">lane mapping</text><text class="s" x="890" y="173">QoS + errors</text>
+  <rect class="box" x="1015" y="90" width="145" height="105"/><text class="t" x="1087" y="125">Shared SRAM</text><text class="s" x="1087" y="151">input vectors</text><text class="s" x="1087" y="173">output words</text>
+  <rect class="accent" x="445" y="285" width="310" height="120"/><text class="t" x="600" y="325">Existing INT8 Accelerator</text><text class="s" x="600" y="352">tagged command + K/4 chunks</text><text class="s" x="600" y="377">PyTorch-exact four-byte result</text>
+  <path class="line" d="M230 142H282"/><path class="line" d="M510 142H562"/><path class="line" d="M745 142H797"/><path class="line" d="M980 142H1012"/>
+  <path class="line" d="M510 175C560 235 560 255 575 282"/><path class="line" d="M755 345C850 345 890 250 890 198"/>
+  <path class="dash" d="M445 390C310 455 130 390 135 198"/>
+  <text class="s" x="253" y="126">doorbell</text><text class="s" x="538" y="126">request</text><text class="s" x="773" y="126">physical</text><text class="s" x="995" y="126">beats</text><text class="s" x="300" y="440">completion is published only after acknowledged output write</text>
+</svg>

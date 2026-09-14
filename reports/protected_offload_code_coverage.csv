@@ -1,0 +1,5 @@
+scope,line_hit,line_total,line_percent,branch_hit,branch_total,branch_percent,note
+protected_offload_rtl,289,341,84.75,NA,NA,NA,reviewed=289/289 (100.00%); exclusions=52; merged from 106 executable runs
+protected_offload_apb_csr.sv,83,97,85.57,NA,NA,NA,Verilator 5.020 LCOV does not export branch counters
+protected_offload_dma.sv,198,234,84.62,NA,NA,NA,Verilator 5.020 LCOV does not export branch counters
+protected_queue_count_next.sv,8,10,80.00,NA,NA,NA,Verilator 5.020 LCOV does not export branch counters

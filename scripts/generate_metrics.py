@@ -49,6 +49,16 @@ def main() -> int:
     fx_compile = rows("reports/fx_compile_summary.csv") if (ROOT / "reports/fx_compile_summary.csv").exists() else []
     fx_rtl = rows("reports/fx_rtl_summary.csv") if (ROOT / "reports/fx_rtl_summary.csv").exists() else []
     fx_coverage = rows("reports/fx_coverage.csv") if (ROOT / "reports/fx_coverage.csv").exists() else []
+    protected_directed = rows("reports/protected_offload_directed_summary.csv") if (ROOT / "reports/protected_offload_directed_summary.csv").exists() else []
+    protected_random = rows("reports/protected_offload_random_summary.csv") if (ROOT / "reports/protected_offload_random_summary.csv").exists() else []
+    protected_model = rows("reports/protected_offload_model_summary.csv") if (ROOT / "reports/protected_offload_model_summary.csv").exists() else []
+    protected_feature = rows("reports/protected_offload_functional_coverage.csv") if (ROOT / "reports/protected_offload_functional_coverage.csv").exists() else []
+    protected_cross = rows("reports/protected_offload_cross_coverage.csv") if (ROOT / "reports/protected_offload_cross_coverage.csv").exists() else []
+    protected_mutations = rows("reports/protected_offload_mutations.csv") if (ROOT / "reports/protected_offload_mutations.csv").exists() else []
+    protected_formal = rows("reports/protected_offload_formal.csv") if (ROOT / "reports/protected_offload_formal.csv").exists() else []
+    protected_components = rows("reports/protected_offload_component_smoke.csv") if (ROOT / "reports/protected_offload_component_smoke.csv").exists() else []
+    protected_firmware = rows("reports/protected_offload_firmware.csv") if (ROOT / "reports/protected_offload_firmware.csv").exists() else []
+    protected_code = rows("reports/protected_offload_code_coverage.csv")[0] if (ROOT / "reports/protected_offload_code_coverage.csv").exists() else None
     branch_value = (
         f"{code['branch_hit']} / {code['branch_total']} ({code['branch_percent']}%)"
         if code["branch_percent"] != "NA" else "NA (Verilator 5.020 LCOV)"
@@ -86,6 +96,19 @@ def main() -> int:
             ("fx_rtl_execution", fx_rtl[0]["status"], f"{fx_rtl[0]['words_checked']} intermediate/final words checked"),
             ("fx_compiler_coverage", f"{sum(r['status'] == 'COVERED' for r in fx_coverage)} / {len(fx_coverage)}", "Depth, K, activation, bank-reuse, and rejection points"),
         ])
+    if protected_directed:
+        metrics.extend([
+            ("protected_offload_directed", f"{sum(r['status'] == 'PASS' for r in protected_directed)} / {len(protected_directed)}", "Memory-to-memory DMA RTL scenarios"),
+            ("protected_offload_random", f"{sum(r['status'] == 'PASS' for r in protected_random)} / {len(protected_random)}", "Deterministic descriptor/protection/fault workloads"),
+            ("protected_offload_model", f"{sum(r['status'] == 'PASS' for r in protected_model)} / {len(protected_model)}", "Python orchestration plus compiled C++ event model"),
+            ("protected_offload_coverage", f"{sum(r['status'] == 'COVERED' for r in protected_feature)} / {len(protected_feature)}; {sum(r['status'] == 'COVERED' for r in protected_cross)} / {len(protected_cross)}", "Functional points; same-execution crosses"),
+            ("protected_offload_mutations", f"{sum(r['status'] == 'DETECTED' for r in protected_mutations)} / {len(protected_mutations)}", "Expected controller defects detected"),
+            ("protected_offload_formal", f"{sum(r['status'] == 'PASS' for r in protected_formal)} / {len(protected_formal)}", "Bounded solver checks with reachable covers"),
+            ("protected_offload_components", f"{sum(r['status'] == 'PASS' for r in protected_components)} / {len(protected_components)}", "Descriptor, queue, AXI adapter, and IOMMU checks"),
+            ("protected_offload_firmware", f"{sum(r.get('execution_status') == 'PASS' for r in protected_firmware)} / {len(protected_firmware)}", "GCC-built RV32 APB/DMA execution matrix"),
+        ])
+        if protected_code:
+            metrics.append(("protected_offload_code", f"raw {protected_code['line_hit']} / {protected_code['line_total']} ({protected_code['line_percent']}%)", protected_code["note"]))
     with (ROOT / "reports" / "project_metrics.csv").open("w", newline="") as handle:
         writer = csv.writer(handle, lineterminator="\n")
         writer.writerow(["metric", "value", "note"])
@@ -117,6 +140,15 @@ def main() -> int:
         "fx_graph_compilation": "PyTorch FX graphs compiled",
         "fx_rtl_execution": "FX graph RTL execution",
         "fx_compiler_coverage": "FX compiler coverage",
+        "protected_offload_directed": "Protected-offload directed RTL",
+        "protected_offload_random": "Protected-offload seeded RTL",
+        "protected_offload_model": "Protected-offload trace replay",
+        "protected_offload_coverage": "Protected-offload coverage / crosses",
+        "protected_offload_mutations": "Protected-offload RTL mutations",
+        "protected_offload_formal": "Protected-offload bounded properties",
+        "protected_offload_components": "Protected-offload component checks",
+        "protected_offload_firmware": "Protected-offload GCC/RV32 execution",
+        "protected_offload_code": "Protected-offload line coverage",
     }
     table.extend(f"| {labels[key]} | `{value}` |" for key, value, _ in metrics)
     table.append(END)

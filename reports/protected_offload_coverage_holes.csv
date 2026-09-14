@@ -1,0 +1,53 @@
+file,line,raw_hit_count,classification,rationale
+protected_offload_apb_csr.sv,6,0,reviewed_exclusion,module interface instrumentation
+protected_offload_apb_csr.sv,16,0,reviewed_exclusion,module interface instrumentation
+protected_offload_apb_csr.sv,17,0,reviewed_exclusion,module interface instrumentation
+protected_offload_apb_csr.sv,18,0,reviewed_exclusion,module interface instrumentation
+protected_offload_apb_csr.sv,19,0,reviewed_exclusion,module interface instrumentation
+protected_offload_apb_csr.sv,22,0,reviewed_exclusion,module interface instrumentation
+protected_offload_apb_csr.sv,24,0,reviewed_exclusion,module interface instrumentation
+protected_offload_apb_csr.sv,25,0,reviewed_exclusion,module interface instrumentation
+protected_offload_apb_csr.sv,30,0,reviewed_exclusion,module interface instrumentation
+protected_offload_apb_csr.sv,33,0,reviewed_exclusion,module interface instrumentation
+protected_offload_apb_csr.sv,34,0,reviewed_exclusion,module interface instrumentation
+protected_offload_apb_csr.sv,36,0,reviewed_exclusion,module interface instrumentation
+protected_offload_apb_csr.sv,39,0,reviewed_exclusion,module interface instrumentation
+protected_offload_apb_csr.sv,111,0,reviewed_exclusion,assertion/default instrumentation
+protected_offload_dma.sv,15,0,reviewed_exclusion,module interface instrumentation
+protected_offload_dma.sv,16,0,reviewed_exclusion,module interface instrumentation
+protected_offload_dma.sv,17,0,reviewed_exclusion,module interface instrumentation
+protected_offload_dma.sv,18,0,reviewed_exclusion,module interface instrumentation
+protected_offload_dma.sv,21,0,reviewed_exclusion,module interface instrumentation
+protected_offload_dma.sv,23,0,reviewed_exclusion,module interface instrumentation
+protected_offload_dma.sv,24,0,reviewed_exclusion,module interface instrumentation
+protected_offload_dma.sv,26,0,reviewed_exclusion,module interface instrumentation
+protected_offload_dma.sv,54,0,reviewed_exclusion,module interface instrumentation
+protected_offload_dma.sv,56,0,reviewed_exclusion,module interface instrumentation
+protected_offload_dma.sv,60,0,reviewed_exclusion,module interface instrumentation
+protected_offload_dma.sv,64,0,reviewed_exclusion,module interface instrumentation
+protected_offload_dma.sv,68,0,reviewed_exclusion,module interface instrumentation
+protected_offload_dma.sv,69,0,reviewed_exclusion,module interface instrumentation
+protected_offload_dma.sv,71,0,reviewed_exclusion,module interface instrumentation
+protected_offload_dma.sv,76,0,reviewed_exclusion,module interface instrumentation
+protected_offload_dma.sv,77,0,reviewed_exclusion,module interface instrumentation
+protected_offload_dma.sv,127,0,reviewed_exclusion,typed storage/state declaration instrumentation
+protected_offload_dma.sv,129,0,reviewed_exclusion,typed storage/state declaration instrumentation
+protected_offload_dma.sv,130,0,reviewed_exclusion,typed storage/state declaration instrumentation
+protected_offload_dma.sv,131,0,reviewed_exclusion,declaration instrumentation
+protected_offload_dma.sv,132,0,reviewed_exclusion,declaration instrumentation
+protected_offload_dma.sv,133,0,reviewed_exclusion,declaration instrumentation
+protected_offload_dma.sv,134,0,reviewed_exclusion,declaration instrumentation
+protected_offload_dma.sv,136,0,reviewed_exclusion,declaration instrumentation
+protected_offload_dma.sv,139,0,reviewed_exclusion,declaration instrumentation
+protected_offload_dma.sv,140,0,reviewed_exclusion,declaration instrumentation
+protected_offload_dma.sv,145,0,reviewed_exclusion,declaration instrumentation
+protected_offload_dma.sv,146,0,reviewed_exclusion,declaration instrumentation
+protected_offload_dma.sv,147,0,reviewed_exclusion,declaration instrumentation
+protected_offload_dma.sv,298,0,reviewed_exclusion,Verilator compound-statement attribution; transition is event-observed
+protected_offload_dma.sv,347,0,reviewed_exclusion,Verilator case-label attribution; state body is event-observed
+protected_offload_dma.sv,351,0,reviewed_exclusion,Verilator case-label attribution; state body is event-observed
+protected_offload_dma.sv,359,0,reviewed_exclusion,Verilator case-label attribution; state body is event-observed
+protected_offload_dma.sv,396,0,reviewed_exclusion,Verilator case-label attribution; state body is event-observed
+protected_offload_dma.sv,403,0,reviewed_exclusion,assertion/default instrumentation
+protected_queue_count_next.sv,5,0,reviewed_exclusion,module interface instrumentation
+protected_queue_count_next.sv,8,0,reviewed_exclusion,module interface instrumentation

@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "sources": [
+    {"project": "AXI4-QoS-Fabric-DV", "commit": "25fd40691c9052b638f38746528da2d09ddb1e88", "file": "vendor/axi/axi4_qos_fabric.sv", "sha256": "522a6bd42de05416ee076b90c53b20bd606aaaaaadba070ccec74f3db5071bf7"},
+    {"project": "AXI4-QoS-Fabric-DV", "commit": "25fd40691c9052b638f38746528da2d09ddb1e88", "file": "vendor/axi/dma_iommu.sv", "sha256": "f8369f4e4dac063dc0afd372998ef0331a1339cc770d2ad0ea93bc13089079a8"},
+    {"project": "AXI4-QoS-Fabric-DV", "commit": "25fd40691c9052b638f38746528da2d09ddb1e88", "file": "vendor/axi/qos_arbiter.sv", "sha256": "8cc6f45f9f194c1101bfc709413968cf6dbf241c0643c50da9bbd89723395396"},
+    {"project": "ucie_chiplet_soc", "commit": "96ecbb1d572f001c1000beb6edf44b4cc6ebcec9", "file": "vendor/rv32/rv32_core.sv", "sha256": "6e4e3a8edea01bb9bae53ecc28f186e712180738226cccdf430ff54f6b4b96b7"},
+    {"project": "ucie_chiplet_soc", "commit": "96ecbb1d572f001c1000beb6edf44b4cc6ebcec9", "file": "vendor/rv32/rv32_rom_feeder.sv", "sha256": "018528b019d2119b42742664608098915f1b50c4040f460f00a9199677a6a80a"},
+    {"project": "AXI4-L1-Cache-DV", "commit": "6f54c0fbd996b5878691e2cacf52d038b1af561e", "file": "vendor/cache/dcache_pkg.sv", "sha256": "e61df0e147a35f667ee9acd8a6bf7fea272ab28ec600d202d17b213390e7656e"},
+    {"project": "AXI4-L1-Cache-DV", "commit": "6f54c0fbd996b5878691e2cacf52d038b1af561e", "file": "vendor/cache/l1_dcache_top.sv", "sha256": "4424f4c740e3816cf16ee2b7d76200702c1440f9ea126adceb3628f354aaee9a"}
+  ]
+}

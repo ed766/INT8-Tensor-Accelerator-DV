@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="480" viewBox="0 0 1000 480" role="img">
+<title>Protected DMA device-cycle scaling</title>
+<rect width="100%" height="100%" rx="20" fill="#071b2a"/>
+<style>.h{font:700 24px Georgia,serif;fill:#f5f1e8}.t{font:15px Georgia,serif;fill:#d8e8e6}.s{font:13px Georgia,serif;fill:#a9cbc7}.axis{stroke:#8fb9b4;stroke-width:1}.bar{fill:#70d6c5}.bar2{fill:#f4c95d}</style>
+<text class="h" x="48" y="45">Protected DMA: measured device cycles, batch 16</text>
+<line class="axis" x1="90" y1="400" x2="930" y2="400"/><line class="axis" x1="90" y1="85" x2="90" y2="400"/>
+<rect class="bar" x="130" y="356.2" width="90" height="43.8" rx="6"/>
+<text class="t" x="175" y="425" text-anchor="middle">K=4</text>
+<text class="t" x="175" y="346.2" text-anchor="middle">325</text>
+<rect class="bar" x="285" y="341.2" width="90" height="58.8" rx="6"/>
+<text class="t" x="330" y="425" text-anchor="middle">K=8</text>
+<text class="t" x="330" y="331.2" text-anchor="middle">437</text>
+<rect class="bar" x="440" y="311.0" width="90" height="89.0" rx="6"/>
+<text class="t" x="485" y="425" text-anchor="middle">K=16</text>
+<text class="t" x="485" y="301.0" text-anchor="middle">661</text>
+<rect class="bar" x="595" y="250.7" width="90" height="149.3" rx="6"/>
+<text class="t" x="640" y="425" text-anchor="middle">K=32</text>
+<text class="t" x="640" y="240.7" text-anchor="middle">1109</text>
+<rect class="bar" x="750" y="130.0" width="90" height="270.0" rx="6"/>
+<text class="t" x="795" y="425" text-anchor="middle">K=64</text>
+<text class="t" x="795" y="120.0" text-anchor="middle">2005</text>
+<text class="s" x="500" y="462" text-anchor="middle">Behavioral Verilator cycles from descriptor acceptance to completion</text>
+</svg>

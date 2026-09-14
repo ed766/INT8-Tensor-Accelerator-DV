@@ -27,5 +27,14 @@
 | `fx_graph_compilation` | 20 / 20 | torch.fx Linear/ReLU graphs compiled |
 | `fx_rtl_execution` | PASS | 624 intermediate/final words checked |
 | `fx_compiler_coverage` | 10 / 10 | Depth, K, activation, bank-reuse, and rejection points |
+| `protected_offload_directed` | 40 / 40 | Memory-to-memory DMA RTL scenarios |
+| `protected_offload_random` | 100 / 100 | Deterministic descriptor/protection/fault workloads |
+| `protected_offload_model` | 205 / 205 | Python orchestration plus compiled C++ event model |
+| `protected_offload_coverage` | 77 / 77; 64 / 64 | Functional points; same-execution crosses |
+| `protected_offload_mutations` | 10 / 10 | Expected controller defects detected |
+| `protected_offload_formal` | 10 / 10 | Bounded solver checks with reachable covers |
+| `protected_offload_components` | 4 / 4 | Descriptor, queue, AXI adapter, and IOMMU checks |
+| `protected_offload_firmware` | 24 / 24 | GCC-built RV32 APB/DMA execution matrix |
+| `protected_offload_code` | raw 289 / 341 (84.75%) | reviewed=289/289 (100.00%); exclusions=52; merged from 106 executable runs |
 
 All values are regenerated from checked-in CSV evidence by `make release-check`.

@@ -7,3 +7,9 @@ __pycache__/
 formal/int8_control/
 formal/int8_control_prove/
 formal/int8_control_cover/
+integration/protected_offload/formal/protected_axi_adapter_prove/
+integration/protected_offload/formal/protected_axi_adapter_cover/
+integration/protected_offload/formal/protected_queue_count_prove/
+integration/protected_offload/formal/protected_queue_count_cover/
+integration/protected_offload/formal/protected_axi_adapter/
+integration/protected_offload/formal/protected_queue_count/

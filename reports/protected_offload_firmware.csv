@@ -1,0 +1,25 @@
+workflow,optimizer,status,execution_status,elf_sha256,instruction_bytes,execution_cycles,retired_instructions,tlb_hits,tlb_misses,page_walk_reads,detail,execution_detail
+0,O0,PASS,PASS,e110e592ff0250427fdfcff0ab2a07b5a4572242fc662a54911818a73409b715,1164,638,114,0,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+0,O2,PASS,PASS,3792f94cc56de9199f10f7138e46e8449ac42df74114eed112e9cc920f1e6f11,520,477,59,0,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+0,Os,PASS,PASS,408fe54c819149d5fb73cd3dd1f7142b1786120cdae21bfce055bfe5d08b6cba,468,469,57,0,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+1,O0,PASS,PASS,def14761c262c0b54f72de5f3c78f3fe2aa24c7e86f7a8f53fa820dad2a8d2da,1168,681,127,4,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+1,O2,PASS,PASS,ee51db8ac0cdaa2b1891af5bcb19b32b06d13e9cd09a4b1012d626405e7c9136,528,511,69,4,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+1,Os,PASS,PASS,a915258192631a044f83ae966bef612be82c398699fb5e3cdfd7a7d671201bc8,476,509,69,4,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+2,O0,PASS,PASS,f919c71cd964e6e8491f5e0312a3528b74234b0cde8c0159bcb1d1a9a21a360c,1168,761,151,18,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+2,O2,PASS,PASS,88e65f76a6a3ecef92b7e492003d0baf7314a24989a1a6e1f92e33ffa6da2ddd,528,595,93,18,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+2,Os,PASS,PASS,ff59f3b6f376b82beaf0739453c1efb3d9f13f8677a9acecf3b89b9ceb862c3a,476,594,94,18,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+3,O0,PASS,PASS,2d6b694680eba8fcdd396d73bf65ac63cae821ec315599e261482968088db922,1168,1081,247,70,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+3,O2,PASS,PASS,adb80f5006fb5dcb83b09b841b922412fbe252940c59b8977efe370b1487f0db,528,917,185,70,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+3,Os,PASS,PASS,e4d609f82ca172d8d6a97d540d528d67b505380a097f69a6f498edf08dac0ed1,476,917,189,70,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+4,O0,PASS,PASS,8ddd0bed4dad7f6af9591a01836d1736ccb360c2d06ce3f68e6b5dc3217c5ce9,1168,741,145,15,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+4,O2,PASS,PASS,48b4c90080432a9aca3b61f5187a9357168f8f4211f85c76d379baa3cca21a14,528,567,85,15,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+4,Os,PASS,PASS,b781d3d1164374a156a02792240b581d9c4f0d6468072f87f4955867861534c8,476,577,89,15,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+5,O0,PASS,PASS,772fb4cb09dd932e8b177b89b7f0c59e7a2717df033024dff67cf9e9a7f2b462,1168,1141,265,78,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+5,O2,PASS,PASS,237e5f320b38266a3c21e9562f1d86393f317e280edcf7f11b3c3be4253d0685,532,976,202,78,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+5,Os,PASS,PASS,a7d9489464dc19c045f63937cb8240bf93a6fa502af10356eb72ba8696391cb8,480,988,210,78,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+6,O0,PASS,PASS,cdd92c7b4daf5264af7f8f2ebf3550cb3dd8356d3a7c975bd919a1ff1de770e9,1168,741,145,16,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+6,O2,PASS,PASS,cc73c5442853c5b7f3ae99b714b48d6247d7340a7353400e74d1b456afdb1fbf,528,581,89,16,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+6,Os,PASS,PASS,1eeee8f81d5864f7a9214f1574e1aedb03b646dbbe5fccf87b15539904f0445a,476,577,89,16,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+7,O0,PASS,PASS,ebbb5281ffcdf03dbd3ef5c1e48ff5741d965cf012003afa0040acd8da7c3cb0,1168,721,139,10,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+7,O2,PASS,PASS,68d6730ab67f0edd90dab5bdd28ba4f42ede939fc86252a794c54d6d3a49a671,528,539,77,10,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard
+7,Os,PASS,PASS,5da50ac1a7b1b7bee98b44a09e50e33439544010a8663cce8eb1b547d9534630,476,543,79,10,2,4,compiled freestanding RV32I/Zicsr firmware,RV32 APB/DMA/accelerator/output-memory scoreboard

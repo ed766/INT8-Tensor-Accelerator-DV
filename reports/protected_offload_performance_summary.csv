@@ -1,0 +1,16 @@
+name,status,failure,k,batch,bp_pct,fault,pattern,comp_stall,asid,qos,cycles,job_cycles,reads,writes,translations,stalls,irq_cycles,trace
+performance_k4_b1,PASS,,4,1,0,0,,,,,621,85,1,1,2,0,45,build/protected_offload/events/performance_k4_b1.csv
+performance_k4_b16,PASS,,4,16,0,0,,,,,861,325,16,16,32,0,45,build/protected_offload/events/performance_k4_b16.csv
+performance_k4_b64,PASS,,4,64,0,0,,,,,1629,1093,64,64,128,0,45,build/protected_offload/events/performance_k4_b64.csv
+performance_k8_b1,PASS,,8,1,0,0,,,,,628,92,2,1,3,0,45,build/protected_offload/events/performance_k8_b1.csv
+performance_k8_b16,PASS,,8,16,0,0,,,,,973,437,32,16,48,0,45,build/protected_offload/events/performance_k8_b16.csv
+performance_k8_b64,PASS,,8,64,0,0,,,,,2077,1541,128,64,192,0,45,build/protected_offload/events/performance_k8_b64.csv
+performance_k16_b1,PASS,,16,1,0,0,,,,,642,106,4,1,5,0,45,build/protected_offload/events/performance_k16_b1.csv
+performance_k16_b16,PASS,,16,16,0,0,,,,,1197,661,64,16,80,0,45,build/protected_offload/events/performance_k16_b16.csv
+performance_k16_b64,PASS,,16,64,0,0,,,,,2973,2437,256,64,320,0,45,build/protected_offload/events/performance_k16_b64.csv
+performance_k32_b1,PASS,,32,1,0,0,,,,,670,134,8,1,9,0,45,build/protected_offload/events/performance_k32_b1.csv
+performance_k32_b16,PASS,,32,16,0,0,,,,,1645,1109,128,16,144,0,45,build/protected_offload/events/performance_k32_b16.csv
+performance_k32_b64,PASS,,32,64,0,0,,,,,4765,4229,512,64,576,0,45,build/protected_offload/events/performance_k32_b64.csv
+performance_k64_b1,PASS,,64,1,0,0,,,,,726,190,16,1,17,0,45,build/protected_offload/events/performance_k64_b1.csv
+performance_k64_b16,PASS,,64,16,0,0,,,,,2541,2005,256,16,272,0,45,build/protected_offload/events/performance_k64_b16.csv
+performance_k64_b64,PASS,,64,64,0,0,,,,,8349,7813,1024,64,1088,0,45,build/protected_offload/events/performance_k64_b64.csv

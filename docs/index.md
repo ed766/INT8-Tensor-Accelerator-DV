@@ -14,3 +14,7 @@
 - [Portable validation and FPGA readiness](fpga_readiness.md)
 - [AXI and packed-record integration](axi_integration.md)
 - [RV32I versus accelerator benchmark](rv32_accelerator_benchmark.md)
+- [Protected memory-to-memory offload](protected_offload.md)
+- [Protected-offload component compatibility](protected_offload_compatibility.md)
+- [Protected-offload address map](protected_offload_address_map.md)
+- [Protected-offload performance comparison](protected_offload_performance.md)

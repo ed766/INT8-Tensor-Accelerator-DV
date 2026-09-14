@@ -38,6 +38,15 @@ This project is the portfolio's ML/datapath example. It shows how a PyTorch mode
 | PyTorch FX graphs compiled | `20 / 20` |
 | FX graph RTL execution | `PASS` |
 | FX compiler coverage | `10 / 10` |
+| Protected-offload directed RTL | `40 / 40` |
+| Protected-offload seeded RTL | `100 / 100` |
+| Protected-offload trace replay | `205 / 205` |
+| Protected-offload coverage / crosses | `77 / 77; 64 / 64` |
+| Protected-offload RTL mutations | `10 / 10` |
+| Protected-offload bounded properties | `10 / 10` |
+| Protected-offload component checks | `4 / 4` |
+| Protected-offload GCC/RV32 execution | `24 / 24` |
+| Protected-offload line coverage | `raw 289 / 341 (84.75%)` |
 <!-- END GENERATED METRICS -->
 
 See [project metrics](docs/project_metrics.md), the [verification plan](docs/verification_plan.md), the [FX graph compiler](docs/fx_graph_compiler.md), and the [two-layer PyTorch demonstration](docs/pytorch_mlp_demo.md).
@@ -81,6 +90,26 @@ The dashboard is generated from passing behavioral Verilator rows. Review the
 [phase breakdown and methodology](reports/rv32_accel_benchmark_summary.md), and
 [backpressure results](reports/rv32_accel_backpressure.csv) for the underlying evidence.
 
+## Protected Memory-to-Memory Offload
+
+![Protected accelerator offload](docs/images/protected_offload_architecture.svg)
+
+An optional integration lane adds a four-entry descriptor DMA and completion
+FIFO around the existing tensor engine. APB-programmed jobs carry an ASID, QoS,
+parameter-bank generation, input/output IOVAs, strides, K, and batch size. The
+controller prefetches a complete vector before issuing the accelerator command,
+waits for the output memory acknowledgement before success, and reports precise
+fault stage and completed-vector count through a level interrupt.
+
+Measured evidence includes `40 / 40` directed and `100 / 100` seeded RTL jobs,
+`205 / 205` independent trace replays, `77 / 77` functional points, `64 / 64`
+same-execution crosses, `10 / 10` mutation detections, and `10 / 10` solver
+properties. A `24 / 24` GCC matrix boots eight workflows at three optimization
+levels on RV32, traverses APB and the integrated two-level-walk IOMMU, and checks
+the result mailbox plus final memory. Focused checks additionally exercise the
+new 32-to-64-bit AXI lane adapter. See the [architecture and evidence boundary](docs/protected_offload.md)
+and [component compatibility audit](docs/protected_offload_compatibility.md).
+
 ## Architecture
 
 - Four signed INT8 activation lanes and four output channels in the reviewed baseline.
@@ -115,6 +144,7 @@ make axi-integration-check # AXI-Lite, AXI-Stream, decoder, and end-to-end trans
 make fx-compiler-check # torch.fx graph validation, compilation, bank scheduling, and RTL execution
 make rv32-benchmark-smoke # GCC firmware, RV32I, APB/AXI, stream, and PyTorch check
 make rv32-benchmark-release-check # optional 40+25+15 matrix and mutations
+make protected-offload-release-check # descriptor DMA, model, coverage, formal, mutations
 ```
 
 High-signal evidence:
@@ -131,6 +161,7 @@ High-signal evidence:
 - [Portable validation and FPGA readiness](docs/fpga_readiness.md)
 - [AXI and packed-record integration](docs/axi_integration.md)
 - [RV32I hardware/software benchmark](docs/rv32_accelerator_benchmark.md)
+- [Protected memory-to-memory offload](docs/protected_offload.md)
 
 ## Repository Layout
 
@@ -143,6 +174,7 @@ scripts/   PyTorch export, regression, coverage, mutation, and report automation
 docs/      reviewer-facing architecture and verification evidence
 reports/   normalized checked-in CSV results
 integration/rv32_offload/  optional GCC/RV32I hardware-software benchmark lane
+integration/protected_offload/  optional protected descriptor-DMA integration lane
 ```
 
 ## Limitations
@@ -150,6 +182,6 @@ integration/rv32_offload/  optional GCC/RV32I hardware-software benchmark lane
 - This is a compact linear-layer engine, not a complete NPU, systolic array, training engine, or software compiler.
 - RV32I speedups are behavioral same-clock cycle ratios against a scalar `-O2` software kernel. They are not Verilator wall time, silicon frequency, FPGA throughput, power, or implementation signoff.
 - The reviewed functional regression uses the `4×4` baseline; `8×8` is separately reported synthesis evidence.
-- No convolution frontend, floating point, sparsity, stochastic rounding, or DMA is included. The optional AXI-Lite/AXI-Stream wrapper is a bounded integration contract, not protocol certification.
+- No convolution frontend, floating point, sparsity, or stochastic rounding is included. The optional protected-offload DMA is a bounded integration lane; it is not AXI/IOMMU certification or a production host subsystem.
 - UVM is intentionally not duplicated; the portfolio's AXI4 QoS fabric owns the reusable UVM/VIP story.
 - PyTorch, Verilator, SymbiYosys, and Yosys results are open-source pre-silicon evidence, not accuracy certification or physical-design signoff.
