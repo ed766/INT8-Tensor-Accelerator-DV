@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "description": "Executable firmware-owned shared-memory integration evidence",
+  "points": {
+    "transport": ["host_axi", "dma_axi", "page_walk_axi", "qos_fabric"],
+    "completion": ["poll", "interrupt_wfi"],
+    "isa": ["rv32i_zicsr", "rv32im_zicsr"],
+    "optimizer": ["O0", "O2", "Os"],
+    "cache_ownership": ["positive_handoff", "skip_flush_detected", "skip_invalidate_detected", "late_dirty_detected", "active_access_detected"],
+    "geometry_k": ["4", "8", "16", "32"],
+    "batch": ["1", "4"],
+    "asid": ["1", "17", "31"],
+    "qos": ["low", "mid", "high", "critical"]
+  },
+  "crosses": {
+    "isa_x_optimizer": ["rv32i_zicsr:O0", "rv32i_zicsr:O2", "rv32i_zicsr:Os", "rv32im_zicsr:O0", "rv32im_zicsr:O2", "rv32im_zicsr:Os"],
+    "completion_x_cache": ["poll:uncached", "interrupt_wfi:uncached", "poll:cached", "interrupt_wfi:cached"],
+    "asid_x_translation": ["1:walk", "17:walk", "31:walk"],
+    "ownership_x_outcome": ["positive_handoff:pass", "skip_flush_detected:expected_fail", "skip_invalidate_detected:expected_fail", "late_dirty_detected:expected_fail", "active_access_detected:expected_fail"]
+  }
+}

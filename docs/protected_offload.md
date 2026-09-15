@@ -15,8 +15,16 @@ evidence. GCC firmware writes the two-level page table, tensors, output storage,
 weights, biases, scaling, and bank generation through the CPU host interface.
 The host, DMA payload, and IOMMU page walker then traverse distinct masters of
 the actual QoS fabric. Its `32 / 32` matrix crosses K, batch size, ASID, QoS,
-and polling versus machine-interrupt/WFI completion. This lane is uncached;
-cache maintenance and software ownership are reported separately.
+and polling versus machine-interrupt/WFI completion. A companion matrix passes
+`36 / 36` executions across `-O0/-O2/-Os` and RV32I/RV32IM. The seeded shared
+integration passes `100 / 100` and closes its versioned `47 / 47` executable
+points and same-run crosses.
+
+The cached lane inserts the provenance-locked 4-KiB L1 only on the CPU payload
+path. Firmware explicitly flushes before device ownership and invalidates before
+CPU reuse. It passes `8 / 8` positive cases, while `4 / 4` intended-negative
+cases prove that omitted maintenance, a late dirty writeback, and CPU access
+during device ownership are detected.
 
 This optional integration lane turns the tensor engine into a memory-to-memory
 device. Software snapshots a descriptor through APB, the four-entry DMA queue
@@ -39,6 +47,11 @@ a completion record, and holds a level interrupt until software pops that record
 | Guard/queue/AXI/IOMMU checks | `4 / 4` | Descriptor legality, simultaneous queue accounting, lane/error, and translation/TLB cases |
 | Solver properties | `10 / 10` | Eight bounded AXI-adapter checks plus two queue-accounting proofs; reachable covers |
 | GCC firmware execution | `24 / 24` | Eight workflows at `-O0`, `-O2`, and `-Os` booted on RV32 and completed through APB/DMA |
+| Shared-fabric firmware | `32 / 32` | Firmware initializes page tables/data; host, DMA, and PTW use the actual QoS fabric |
+| Compiler/ISA matrix | `36 / 36` | `O0/O2/Os` crossed with RV32I/RV32IM |
+| Shared integration random | `100 / 100` | Deterministic K, batch, ASID, QoS, IRQ, and ISA variation |
+| Cached ownership | `8 / 8` positive; `4 / 4` negatives detected | Flush/fence/device/invalidate/fence handoff |
+| Shared integration coverage | `47 / 47` | Versioned executable predicates; separate from controller-model coverage |
 | Code coverage | raw `289 / 341` (`84.75%`); reviewed `289 / 289` (`100%`) | 52 declaration/interface/case-attribution exclusions remain denominator-visible |
 | Performance comparison rows | `45 / 45` | Scalar RV32I, MMIO stream, and autonomous DMA cycle evidence |
 
@@ -52,8 +65,8 @@ program boots on the provenance-locked RV32 core, programs the descriptor CSRs
 through APB, waits for the level completion interrupt, validates the completion,
 and publishes a result mailbox checked against output memory. The executable
 path uses the locked educational IOMMU, performs two-level page walks, and
-records TLB activity per firmware run. Cache-maintenance ownership tests remain
-explicitly deferred.
+records TLB activity per firmware run. Cache-maintenance ownership evidence is
+recorded in `protected_cache_ownership.csv` and `protected_cache_negative.csv`.
 
 ## Descriptor and Completion Contract
 
@@ -86,8 +99,9 @@ full occupancy, ordering, and backpressure. The imported educational IOMMU is
 integrated in the RV32 firmware path and is also separately exercised for page
 walk, TLB hit, ASID separation, invalidation, and permission denial. The DMA-to-AXI adapter is
 separately exercised for lower/upper 32-bit lanes, independent AW/W waits,
-read/write responses, and error propagation. A fully wired four-master QoS
-fabric and cached-host ownership path are not claimed by this release.
+read/write responses, and error propagation. The four-master QoS fabric is
+exercised by firmware-owned host, payload DMA, and page-walk traffic. The
+cached-host path is separately checked; neither is an AXI compliance claim.
 
 ## Reviewer Commands
 
@@ -95,6 +109,9 @@ fabric and cached-host ownership path are not claimed by this release.
 make protected-offload-smoke
 make protected-offload-service-check
 make protected-offload-shared-matrix
+make protected-offload-shared-compiler
+make protected-offload-shared-random
+make protected-offload-cache-ownership
 make protected-offload-components
 make protected-offload-directed
 make protected-offload-firmware
@@ -109,5 +126,5 @@ make protected-offload-release-check
 
 This is behavioral open-source pre-silicon evidence. It is not AXI compliance,
 IOMMU certification, production firmware, cache coherence, or implementation
-signoff. The current compiled workflows poll the level IRQ status through APB;
-trap-handler-driven completion and recovery remain outside this lane.
+signoff. Half of the shared-fabric matrix polls; half uses machine external
+interrupts, WFI, trap entry, completion draining, acknowledgement, and MRET.

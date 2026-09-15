@@ -8,5 +8,7 @@ B-HOST-AXI,Firmware-owned shared-memory host path,PASS,protected-offload-shared-
 B-PAGE-TABLE,Firmware-created page-table SRAM,PASS,protected-offload-shared-matrix,firmware writes root and leaf PTEs before DMA submission,
 B-FABRIC,Four-master executable AXI fabric topology,PASS,protected-offload-shared-matrix,host DMA and page-walk masters observed; fourth master reserved,
 B-IRQ,Machine interrupt aggregation and WFI,PASS,protected-offload-shared-matrix,16 polling and 16 interrupt-driven workflows,
-C-CACHE,Baseline L1 ownership discipline,NOT_RUN,protected-offload-cache-ownership,no canonical report,uncached shared-memory milestone prerequisite
+C-CACHE,Baseline L1 ownership discipline,PASS,protected-offload-cache-ownership,8/8 positive and 4/4 intended-negative ownership cases,
+C-COMPILER,RV32I/RV32IM compiler matrix,PASS,protected-offload-shared-compiler,36/36 O0 O2 Os executable fabric workflows,
+C-RANDOM,Constrained executable shared-memory workloads,PASS,protected-offload-shared-random,100/100 deterministic seeded workflows and 47/47 integration coverage points/crosses,
 C-PERFORMANCE,Matched five-path benchmark,NOT_RUN,protected-offload-matched-performance,no canonical report,cached and uncached paths required

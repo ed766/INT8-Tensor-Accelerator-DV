@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
-module tb_rv32_protected_shared;
+module tb_rv32_protected_shared #(parameter bit USE_CACHE=0,parameter bit CPU_ENABLE_M=0);
  logic clk=0,rst_n=0,firmware_done,commit_valid,irq;logic[31:0]firmware_result,commit_pc,cycles;always #5 clk=~clk;
- rv32_protected_shared_top dut(.*);integer commits=0;
+ rv32_protected_shared_top #(.USE_CACHE(USE_CACHE),.CPU_ENABLE_M(CPU_ENABLE_M)) dut(.*);integer commits=0;
  integer expected_k=4,expected_batch=1;
  always_ff@(posedge clk)if(commit_valid)commits<=commits+1;
  initial begin void'($value$plusargs("EXPECT_K=%d",expected_k));void'($value$plusargs("EXPECT_BATCH=%d",expected_batch));repeat(5)@(posedge clk);rst_n=1;repeat(400000)begin @(posedge clk);if(firmware_done)begin
@@ -9,6 +9,6 @@ module tb_rv32_protected_shared;
    if(dut.mem1.memory[13'h200][31:0]!==32'h01010101)$fatal(1,"input memory %016x",dut.mem1.memory[13'h200]);
    for(int v=0;v<expected_batch;v++)begin int wi=(32'h4000+v*4)>>3;logic[31:0]actual;if(v[0])actual=dut.mem1.memory[wi][63:32];else actual=dut.mem1.memory[wi][31:0];if(actual!==((expected_k&255)*32'h01010101))$fatal(1,"output memory v=%0d got=%08x",v,actual);end
    if(dut.perf_tlb_misses<2||dut.perf_walk_reads<4)$fatal(1,"page walk missing");
-   $display("PROTECTED_SHARED|status=PASS|commits=%0d|cycles=%0d|k=%0d|batch=%0d|host=1|dma=1|ptw=1|fabric=1",commits,cycles,expected_k,expected_batch);$finish;end end
+   $display("PROTECTED_SHARED|status=PASS|commits=%0d|cycles=%0d|k=%0d|batch=%0d|cache=%0d|rv32m=%0d|host=1|dma=1|ptw=1|fabric=1",commits,cycles,expected_k,expected_batch,USE_CACHE,CPU_ENABLE_M);$finish;end end
    $fatal(1,"timeout pc=%08x",commit_pc);end
 endmodule

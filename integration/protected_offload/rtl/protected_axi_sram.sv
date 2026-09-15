@@ -10,30 +10,27 @@ module protected_axi_sram #(
   input logic arvalid,output logic arready,input logic[ID_W-1:0]arid,input logic[31:0]araddr,input logic[7:0]arlen,input logic[2:0]arsize,
   output logic rvalid,input logic rready,output logic[ID_W-1:0]rid,output logic[63:0]rdata,output logic[1:0]rresp,output logic rlast
 );
-  logic aw_pending,w_pending;logic[ID_W-1:0]awid_q;logic[31:0]awaddr_q;logic[63:0]wdata_q;logic[7:0]wstrb_q;
-  logic[63:0]effective_wdata;logic[7:0]effective_wstrb;
+  logic write_active;logic[ID_W-1:0]awid_q;logic[31:0]awaddr_q;logic[7:0]awlen_q,write_beat;
+  logic[ID_W-1:0]arid_q;logic[31:0]araddr_q;logic[7:0]arlen_q,read_beat;
   logic[63:0]memory[WORDS];integer idx;
-  assign awready=!aw_pending&&!bvalid;assign wready=!w_pending&&!bvalid;assign arready=!rvalid;
-  assign effective_wdata=w_pending?wdata_q:wdata;assign effective_wstrb=w_pending?wstrb_q:wstrb;
+  assign awready=!write_active&&!bvalid;assign wready=write_active&&!bvalid;assign arready=!rvalid;
   function automatic int word_index(input logic[31:0]a);return int'((a-BASE)>>3);endfunction
   always_ff @(posedge clk or negedge rst_n)begin
-    if(!rst_n)begin aw_pending<=0;w_pending<=0;bvalid<=0;rvalid<=0;bid<=0;rid<=0;rdata<=0;bresp<=0;rresp<=0;rlast<=0;end
+    if(!rst_n)begin write_active<=0;bvalid<=0;rvalid<=0;bid<=0;rid<=0;rdata<=0;bresp<=0;rresp<=0;rlast<=0;write_beat<=0;read_beat<=0;end
     else begin
-      if(awvalid&&awready)begin aw_pending<=1;awid_q<=awid;awaddr_q<=awaddr;end
-      if(wvalid&&wready)begin w_pending<=1;wdata_q<=wdata;wstrb_q<=wstrb;end
-      if((aw_pending||(awvalid&&awready))&&(w_pending||(wvalid&&wready))&&!bvalid)begin
-        idx=word_index(aw_pending?awaddr_q:awaddr);bid<=aw_pending?awid_q:awid;bresp<=FORCE_ERROR?2'b10:2'b00;bvalid<=1;
-        if(!FORCE_ERROR)for(int b=0;b<8;b++)if(effective_wstrb[b])memory[idx][8*b+:8]<=effective_wdata[8*b+:8];
-        aw_pending<=0;w_pending<=0;
+      if(awvalid&&awready)begin write_active<=1;awid_q<=awid;awaddr_q<=awaddr;awlen_q<=awlen;write_beat<=0;end
+      if(wvalid&&wready)begin
+        idx=word_index(awaddr_q)+int'(write_beat);if(!FORCE_ERROR)for(int b=0;b<8;b++)if(wstrb[b])memory[idx][8*b+:8]<=wdata[8*b+:8];
+        if(wlast||write_beat==awlen_q)begin bid<=awid_q;bresp<=FORCE_ERROR?2'b10:2'b00;bvalid<=1;write_active<=0;end else write_beat<=write_beat+1'b1;
       end
       if(bvalid&&bready)bvalid<=0;
-      if(arvalid&&arready)begin rid<=arid;rdata<=memory[word_index(araddr)];rresp<=FORCE_ERROR?2'b10:2'b00;rlast<=1;rvalid<=1;end
-      if(rvalid&&rready)begin rvalid<=0;rlast<=0;end
+      if(arvalid&&arready)begin arid_q<=arid;araddr_q<=araddr;arlen_q<=arlen;read_beat<=0;rid<=arid;rdata<=memory[word_index(araddr)];rresp<=FORCE_ERROR?2'b10:2'b00;rlast<=arlen==0;rvalid<=1;end
+      if(rvalid&&rready)begin if(read_beat==arlen_q)begin rvalid<=0;rlast<=0;end else begin read_beat<=read_beat+1'b1;rid<=arid_q;rdata<=memory[word_index(araddr_q)+int'(read_beat)+1];rresp<=FORCE_ERROR?2'b10:2'b00;rlast<=read_beat+1'b1==arlen_q;end end
     end
   end
 `ifndef SYNTHESIS
-  a_single_beat_aw:assert property(@(posedge clk)disable iff(!rst_n)awvalid|->awlen==0&&awsize<=3);
-  a_single_beat_ar:assert property(@(posedge clk)disable iff(!rst_n)arvalid|->arlen==0&&arsize<=3);
-  a_single_beat_wlast:assert property(@(posedge clk)disable iff(!rst_n)wvalid|->wlast);
+  a_supported_aw:assert property(@(posedge clk)disable iff(!rst_n)awvalid|->awlen<=3&&awsize<=3);
+  a_supported_ar:assert property(@(posedge clk)disable iff(!rst_n)arvalid|->arlen<=3&&arsize<=3);
+  a_wlast_matches_length:assert property(@(posedge clk)disable iff(!rst_n)wvalid&&wready|->wlast==(write_beat==awlen_q));
 `endif
 endmodule

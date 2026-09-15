@@ -1,0 +1,48 @@
+kind,group,name,status,evidence
+point,transport,host_axi,COVERED,executable RTL report
+point,transport,dma_axi,COVERED,executable RTL report
+point,transport,page_walk_axi,COVERED,executable RTL report
+point,transport,qos_fabric,COVERED,executable RTL report
+point,completion,poll,COVERED,executable RTL report
+point,completion,interrupt_wfi,COVERED,executable RTL report
+point,isa,rv32i_zicsr,COVERED,executable RTL report
+point,isa,rv32im_zicsr,COVERED,executable RTL report
+point,optimizer,O0,COVERED,executable RTL report
+point,optimizer,O2,COVERED,executable RTL report
+point,optimizer,Os,COVERED,executable RTL report
+point,cache_ownership,positive_handoff,COVERED,executable RTL report
+point,cache_ownership,skip_flush_detected,COVERED,executable RTL report
+point,cache_ownership,skip_invalidate_detected,COVERED,executable RTL report
+point,cache_ownership,late_dirty_detected,COVERED,executable RTL report
+point,cache_ownership,active_access_detected,COVERED,executable RTL report
+point,geometry_k,4,COVERED,executable RTL report
+point,geometry_k,8,COVERED,executable RTL report
+point,geometry_k,16,COVERED,executable RTL report
+point,geometry_k,32,COVERED,executable RTL report
+point,batch,1,COVERED,executable RTL report
+point,batch,4,COVERED,executable RTL report
+point,asid,1,COVERED,executable RTL report
+point,asid,17,COVERED,executable RTL report
+point,asid,31,COVERED,executable RTL report
+point,qos,low,COVERED,executable RTL report
+point,qos,mid,COVERED,executable RTL report
+point,qos,high,COVERED,executable RTL report
+point,qos,critical,COVERED,executable RTL report
+cross,isa_x_optimizer,rv32i_zicsr:O0,COVERED,same execution/window
+cross,isa_x_optimizer,rv32i_zicsr:O2,COVERED,same execution/window
+cross,isa_x_optimizer,rv32i_zicsr:Os,COVERED,same execution/window
+cross,isa_x_optimizer,rv32im_zicsr:O0,COVERED,same execution/window
+cross,isa_x_optimizer,rv32im_zicsr:O2,COVERED,same execution/window
+cross,isa_x_optimizer,rv32im_zicsr:Os,COVERED,same execution/window
+cross,completion_x_cache,poll:uncached,COVERED,same execution/window
+cross,completion_x_cache,interrupt_wfi:uncached,COVERED,same execution/window
+cross,completion_x_cache,poll:cached,COVERED,same execution/window
+cross,completion_x_cache,interrupt_wfi:cached,COVERED,same execution/window
+cross,asid_x_translation,1:walk,COVERED,same execution/window
+cross,asid_x_translation,17:walk,COVERED,same execution/window
+cross,asid_x_translation,31:walk,COVERED,same execution/window
+cross,ownership_x_outcome,positive_handoff:pass,COVERED,same execution/window
+cross,ownership_x_outcome,skip_flush_detected:expected_fail,COVERED,same execution/window
+cross,ownership_x_outcome,skip_invalidate_detected:expected_fail,COVERED,same execution/window
+cross,ownership_x_outcome,late_dirty_detected:expected_fail,COVERED,same execution/window
+cross,ownership_x_outcome,active_access_detected:expected_fail,COVERED,same execution/window
