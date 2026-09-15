@@ -4,7 +4,9 @@ The integration now includes a CPU-independent `protected_offload_service`
 boundary with explicit APB control, payload-memory, page-walk, TLB
 invalidation, firmware configuration, interrupt, and performance interfaces.
 `make protected-offload-service-check` verifies that boundary elaborates from
-the provenance-locked components. This is a prerequisite, not a claim that the
+the provenance-locked components. The same gate exercises the APB-to-AXI host
+bridge, lower/upper 64-bit SRAM lanes, accelerator configuration backpressure,
+and set-dominant interrupt aggregation. These are prerequisites, not a claim that the
 legacy firmware harness already owns shared-memory or page-table initialization;
 that harness remains separately identified where it uses behavioral memory.
 
