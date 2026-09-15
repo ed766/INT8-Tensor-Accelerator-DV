@@ -80,6 +80,7 @@ protected-offload-provenance:
 protected-offload-service-check:
 	$(PYTHON) integration/protected_offload/scripts/check_service_boundary.py
 	$(PYTHON) integration/protected_offload/scripts/run_host_bridge.py
+	$(PYTHON) integration/protected_offload/scripts/run_irq_aggregator.py
 
 protected-offload-smoke:
 	$(PYTHON) integration/protected_offload/scripts/run_protected_offload.py smoke
