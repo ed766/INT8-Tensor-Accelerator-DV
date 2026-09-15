@@ -38,6 +38,7 @@ module dma_iommu #(
   typedef enum logic [2:0] {IDLE,L1_REQ,L1_WAIT,L2_REQ,L2_WAIT,RESPOND} state_t;
   state_t state;
   logic [31:0] request_iova;
+  logic [31:0] request_root_pt_addr;
   logic [ASID_W-1:0] request_asid;
   logic request_write,request_user;
   logic [21:0] l2_ppn;
@@ -84,7 +85,7 @@ module dma_iommu #(
   assign rsp_fault=response_fault;
   assign rsp_tlb_hit=response_hit;
   assign ptw_req_valid=state==L1_REQ || state==L2_REQ;
-  assign ptw_req_addr=state==L1_REQ ? 32'(root_pt_addr+{20'd0,request_iova[31:22],2'b00})
+  assign ptw_req_addr=state==L1_REQ ? 32'(request_root_pt_addr+{20'd0,request_iova[31:22],2'b00})
     : 32'({l2_ppn[19:0],12'b0}+{20'd0,request_iova[21:12],2'b00});
   assign ptw_rsp_ready=state==L1_WAIT || state==L2_WAIT;
 
@@ -102,12 +103,12 @@ module dma_iommu #(
 
   always_ff @(posedge clk or negedge rst_n) begin
     if(!rst_n) begin
-      state<=IDLE;request_iova<=0;request_asid<=0;request_write<=0;request_user<=0;l2_ppn<=0;replace_ptr<=0;
+      state<=IDLE;request_iova<=0;request_root_pt_addr<=0;request_asid<=0;request_write<=0;request_user<=0;l2_ppn<=0;replace_ptr<=0;
       response_paddr<=0;response_fault<=0;response_hit<=0;tlb_valid<=0;tlb_superpage<=0;tlb_read<=0;tlb_write<=0;
       tlb_user<=0;tlb_accessed<=0;tlb_dirty<=0;tlb_asid<=0;tlb_vpn1<=0;tlb_vpn0<=0;tlb_ppn<=0;
       perf_tlb_hits<=0;perf_tlb_misses<=0;perf_walk_reads<=0;perf_faults<=0;accepted_count<=0;response_count<=0;
     end else begin
-      if(inv_valid) begin
+      if(inv_valid && state==IDLE) begin
         for(int index=0;index<TLB_ENTRIES;index++)
           if(inv_all || tlb_asid[index]==inv_asid) tlb_valid[index]<=0;
       end
@@ -124,8 +125,11 @@ module dma_iommu #(
             end
             perf_tlb_hits<=perf_tlb_hits+1;state<=RESPOND;
           end else begin
-            request_iova<=req_iova;request_asid<=req_asid;request_write<=req_write;request_user<=req_user;
-            perf_tlb_misses<=perf_tlb_misses+1;response_hit<=0;state<=L1_REQ;
+            request_iova<=req_iova;request_root_pt_addr<=root_pt_addr;request_asid<=req_asid;
+            request_write<=req_write;request_user<=req_user;
+            perf_tlb_misses<=perf_tlb_misses+1;response_hit<=0;
+            if (root_pt_addr[11:0] != 0) finish_fault(FAULT_INVALID);
+            else state<=L1_REQ;
           end
         end
         L1_REQ: if(ptw_req_ready) begin perf_walk_reads<=perf_walk_reads+1;state<=L1_WAIT;end
@@ -133,17 +137,20 @@ module dma_iommu #(
           if(ptw_rsp_error) finish_fault(FAULT_ACCESS);
           else if(!pte_valid(ptw_rsp_data)) finish_fault(FAULT_INVALID);
           else if(pte_leaf(ptw_rsp_data)) begin
-            if(!permission_ok(ptw_rsp_data,request_write,request_user)) finish_fault(FAULT_PERMISSION);
+            if (ptw_rsp_data[31:30] != 0 || ptw_rsp_data[19:10] != 0)
+              finish_fault(FAULT_INVALID);
+            else if(!permission_ok(ptw_rsp_data,request_write,request_user)) finish_fault(FAULT_PERMISSION);
             else begin
               install_translation(ptw_rsp_data,1);response_paddr<={ptw_rsp_data[29:20],request_iova[21:0]};
               response_fault<=FAULT_NONE;response_hit<=0;state<=RESPOND;
             end
-          end else begin l2_ppn<=ptw_rsp_data[31:10];state<=L2_REQ;end
+          end else if (ptw_rsp_data[31:30] != 0) finish_fault(FAULT_INVALID);
+          else begin l2_ppn<=ptw_rsp_data[31:10];state<=L2_REQ;end
         end
         L2_REQ: if(ptw_req_ready) begin perf_walk_reads<=perf_walk_reads+1;state<=L2_WAIT;end
         L2_WAIT: if(ptw_rsp_valid) begin
           if(ptw_rsp_error) finish_fault(FAULT_ACCESS);
-          else if(!pte_valid(ptw_rsp_data) || !pte_leaf(ptw_rsp_data)) finish_fault(FAULT_INVALID);
+          else if(!pte_valid(ptw_rsp_data) || !pte_leaf(ptw_rsp_data) || ptw_rsp_data[31:30] != 0) finish_fault(FAULT_INVALID);
           else if(!permission_ok(ptw_rsp_data,request_write,request_user)) finish_fault(FAULT_PERMISSION);
           else begin
             install_translation(ptw_rsp_data,0);response_paddr<={ptw_rsp_data[29:10],request_iova[11:0]};
@@ -162,6 +169,8 @@ module dma_iommu #(
   a_fault_has_no_paddr: assert property (@(posedge clk) disable iff(!rst_n) rsp_valid&&(rsp_fault!=FAULT_NONE) |-> rsp_paddr==0);
   a_response_not_ahead: assert property (@(posedge clk) disable iff(!rst_n) response_count<=accepted_count);
   a_invalidate_blocks_accept: assert property (@(posedge clk) disable iff(!rst_n) inv_valid |-> !req_ready);
+  a_walk_uses_latched_root: assert property (@(posedge clk) disable iff(!rst_n)
+      state!=IDLE && state!=RESPOND && $past(state)!=IDLE |-> $stable(request_root_pt_addr));
   a_walk_only_for_miss: assert property (@(posedge clk) disable iff(!rst_n) ptw_req_valid |-> !response_hit);
 `endif
 endmodule
