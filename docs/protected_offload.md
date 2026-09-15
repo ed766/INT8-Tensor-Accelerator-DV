@@ -10,6 +10,14 @@ and set-dominant interrupt aggregation. These are prerequisites, not a claim tha
 legacy firmware harness already owns shared-memory or page-table initialization;
 that harness remains separately identified where it uses behavioral memory.
 
+The newer `protected-offload-shared-matrix` lane is executable firmware-owned
+evidence. GCC firmware writes the two-level page table, tensors, output storage,
+weights, biases, scaling, and bank generation through the CPU host interface.
+The host, DMA payload, and IOMMU page walker then traverse distinct masters of
+the actual QoS fabric. Its `32 / 32` matrix crosses K, batch size, ASID, QoS,
+and polling versus machine-interrupt/WFI completion. This lane is uncached;
+cache maintenance and software ownership are reported separately.
+
 This optional integration lane turns the tensor engine into a memory-to-memory
 device. Software snapshots a descriptor through APB, the four-entry DMA queue
 translates each input and output address, fetches a complete vector, streams it
@@ -86,6 +94,7 @@ fabric and cached-host ownership path are not claimed by this release.
 ```bash
 make protected-offload-smoke
 make protected-offload-service-check
+make protected-offload-shared-matrix
 make protected-offload-components
 make protected-offload-directed
 make protected-offload-firmware

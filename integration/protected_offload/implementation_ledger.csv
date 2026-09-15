@@ -4,9 +4,9 @@ B-SERVICE,CPU-independent protected offload service,PASS,protected-offload-servi
 B-IRQ-PREREQ,Set-dominant three-source interrupt aggregator,PASS,protected-offload-service-check,masked pending W1C and simultaneous set/ack verified,
 B-ENDPOINTS,Firmware-owned configuration and shared SRAM endpoints,PASS,protected-offload-service-check,lower and upper AXI lanes plus three-cycle config stall verified,
 B-FIRMWARE-LEGACY,Existing compiled protected firmware,PASS,protected-offload-firmware,24/24 executions; behavioral shared memory remains,
-B-HOST-AXI,Firmware-owned shared-memory host path,NOT_RUN,protected-offload-shared-check,no canonical report,host AXI bridge not implemented
-B-PAGE-TABLE,Firmware-created page-table SRAM,NOT_RUN,protected-offload-shared-check,no canonical report,page-table target not implemented
-B-FABRIC,Four-master executable AXI fabric topology,NOT_RUN,protected-offload-fabric-check,no canonical report,host and PTW adapters required
-B-IRQ,Machine interrupt aggregation and WFI,NOT_RUN,compute-host-check,no canonical report,executable shared service prerequisite
+B-HOST-AXI,Firmware-owned shared-memory host path,PASS,protected-offload-shared-matrix,32/32 GCC executions use host AXI master,
+B-PAGE-TABLE,Firmware-created page-table SRAM,PASS,protected-offload-shared-matrix,firmware writes root and leaf PTEs before DMA submission,
+B-FABRIC,Four-master executable AXI fabric topology,PASS,protected-offload-shared-matrix,host DMA and page-walk masters observed; fourth master reserved,
+B-IRQ,Machine interrupt aggregation and WFI,PASS,protected-offload-shared-matrix,16 polling and 16 interrupt-driven workflows,
 C-CACHE,Baseline L1 ownership discipline,NOT_RUN,protected-offload-cache-ownership,no canonical report,uncached shared-memory milestone prerequisite
 C-PERFORMANCE,Matched five-path benchmark,NOT_RUN,protected-offload-matched-performance,no canonical report,cached and uncached paths required

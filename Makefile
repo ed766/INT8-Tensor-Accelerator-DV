@@ -83,6 +83,12 @@ protected-offload-service-check:
 	$(PYTHON) integration/protected_offload/scripts/run_irq_aggregator.py
 	$(PYTHON) integration/protected_offload/scripts/run_endpoints.py
 
+protected-offload-shared-check: protected-offload-provenance
+	$(PYTHON) integration/protected_offload/scripts/run_shared_firmware.py
+
+protected-offload-shared-matrix: protected-offload-provenance
+	$(PYTHON) integration/protected_offload/scripts/run_shared_firmware.py --matrix
+
 protected-offload-smoke:
 	$(PYTHON) integration/protected_offload/scripts/run_protected_offload.py smoke
 
