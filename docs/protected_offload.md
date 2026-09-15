@@ -1,5 +1,13 @@
 # Protected Accelerator Offload
 
+The integration now includes a CPU-independent `protected_offload_service`
+boundary with explicit APB control, payload-memory, page-walk, TLB
+invalidation, firmware configuration, interrupt, and performance interfaces.
+`make protected-offload-service-check` verifies that boundary elaborates from
+the provenance-locked components. This is a prerequisite, not a claim that the
+legacy firmware harness already owns shared-memory or page-table initialization;
+that harness remains separately identified where it uses behavioral memory.
+
 This optional integration lane turns the tensor engine into a memory-to-memory
 device. Software snapshots a descriptor through APB, the four-entry DMA queue
 translates each input and output address, fetches a complete vector, streams it
@@ -75,6 +83,7 @@ fabric and cached-host ownership path are not claimed by this release.
 
 ```bash
 make protected-offload-smoke
+make protected-offload-service-check
 make protected-offload-components
 make protected-offload-directed
 make protected-offload-firmware

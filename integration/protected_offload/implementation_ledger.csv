@@ -1,0 +1,10 @@
+requirement_id,component,status,test_target,evidence,blocking_dependency
+A-RV32M-IMPORT,Authoritative optional RV32M core snapshot,PASS,protected-offload-provenance,hash-verified core and muldiv snapshots,
+B-SERVICE,CPU-independent protected offload service,PASS,protected-offload-service-check,explicit APB payload PTW invalidation and configuration ports,
+B-FIRMWARE-LEGACY,Existing compiled protected firmware,PASS,protected-offload-firmware,24/24 executions; behavioral shared memory remains,
+B-HOST-AXI,Firmware-owned shared-memory host path,NOT_RUN,protected-offload-shared-check,no canonical report,host AXI bridge not implemented
+B-PAGE-TABLE,Firmware-created page-table SRAM,NOT_RUN,protected-offload-shared-check,no canonical report,page-table target not implemented
+B-FABRIC,Four-master executable AXI fabric topology,NOT_RUN,protected-offload-fabric-check,no canonical report,host and PTW adapters required
+B-IRQ,Machine interrupt aggregation and WFI,NOT_RUN,compute-host-check,no canonical report,executable shared service prerequisite
+C-CACHE,Baseline L1 ownership discipline,NOT_RUN,protected-offload-cache-ownership,no canonical report,uncached shared-memory milestone prerequisite
+C-PERFORMANCE,Matched five-path benchmark,NOT_RUN,protected-offload-matched-performance,no canonical report,cached and uncached paths required

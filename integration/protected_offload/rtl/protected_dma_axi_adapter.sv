@@ -2,7 +2,9 @@
 
 // Converts the DMA's one-at-a-time 32-bit memory requests into legal
 // single-beat accesses on the 64-bit AXI subset used by the portfolio fabric.
-module protected_dma_axi_adapter (
+module protected_dma_axi_adapter #(
+  parameter logic [3:0] AXI_ID = 4'h1
+) (
   input  logic clk,
   input  logic rst_n,
   input  logic req_valid,
@@ -64,8 +66,8 @@ module protected_dma_axi_adapter (
   assign bready = state == WRITE_RESP;
   assign arvalid = state == READ_SEND;
   assign rready = state == READ_RESP;
-  assign awid = 4'h1;
-  assign arid = 4'h1;
+  assign awid = AXI_ID;
+  assign arid = AXI_ID;
   assign awaddr = {address_q[31:3], 3'b000};
   assign araddr = {address_q[31:3], 3'b000};
   assign awlen = 8'd0;
@@ -114,13 +116,13 @@ module protected_dma_axi_adapter (
             state <= WRITE_RESP;
         end
         WRITE_RESP: if (bvalid) begin
-          rsp_error <= bresp != 2'b00 || bid != 4'h1;
+          rsp_error <= bresp != 2'b00 || bid != AXI_ID;
           state <= RESPOND;
         end
         READ_SEND: if (arvalid && arready) state <= READ_RESP;
         READ_RESP: if (rvalid) begin
           rsp_rdata <= upper_q ? rdata[63:32] : rdata[31:0];
-          rsp_error <= rresp != 2'b00 || rid != 4'h1 || !rlast;
+          rsp_error <= rresp != 2'b00 || rid != AXI_ID || !rlast;
           state <= RESPOND;
         end
         RESPOND: if (rsp_ready) state <= IDLE;

@@ -26,8 +26,8 @@ def main()->int:
     for workflow in range(8):
       for opt in ("O0","O2","Os"):
         case=OUT/f"workflow_{workflow}_{opt}";case.mkdir(parents=True,exist_ok=True);elf=case/"firmware.elf"
-        cmd=[gcc,"-march=rv32i_zicsr","-mabi=ilp32",f"-{opt}","-g","-ffreestanding","-nostdlib","-fno-builtin","-fno-pic","-fno-stack-protector","-msmall-data-limit=0","-mno-relax",f"-DWORKFLOW={workflow}",f"-I{FW}",str(BASE/"crt0.S"),str(BASE/"runtime.c"),str(FW/"protected_offload.c"),f"-T{BASE/'link.ld'}","-Wl,--build-id=none","-o",str(elf)]
-        run=subprocess.run(cmd,cwd=ROOT,text=True,capture_output=True)
+        cmd=[gcc,"-march=rv32i_zicsr","-mabi=ilp32",f"-{opt}","-g",f"-frandom-seed=protected-{workflow}-{opt}","-save-temps=obj","-ffreestanding","-nostdlib","-fno-builtin","-fno-pic","-fno-stack-protector","-msmall-data-limit=0","-mno-relax",f"-DWORKFLOW={workflow}",f"-I{FW}",str(BASE/"crt0.S"),str(BASE/"runtime.c"),str(FW/"protected_offload.c"),f"-T{BASE/'link.ld'}","-Wl,--build-id=none","-o",str(elf)]
+        run=subprocess.run(cmd,cwd=case,text=True,capture_output=True)
         status="PASS" if run.returncode==0 else "FAIL";detail="compiled freestanding RV32I/Zicsr firmware"
         if status=="PASS":
           undefined=subprocess.run([nm,"-u",str(elf)],capture_output=True,text=True).stdout.strip()

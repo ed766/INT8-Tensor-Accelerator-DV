@@ -11,6 +11,7 @@ FIRMWARE = BUILD / "firmware"
 REPORT = ROOT / "reports/protected_offload_firmware.csv"
 BINARY = BUILD / "firmware_exec_obj/Vtb_rv32_protected_offload"
 SOURCES = [
+    ROOT / "integration/protected_offload/vendor/rv32/rv32_muldiv.sv",
     ROOT / "integration/protected_offload/vendor/rv32/rv32_core.sv",
     ROOT / "integration/protected_offload/vendor/rv32/rv32_rom_feeder.sv",
     ROOT / "rtl/int8_tensor_accel.sv",
