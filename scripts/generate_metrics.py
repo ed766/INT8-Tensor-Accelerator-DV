@@ -54,11 +54,17 @@ def main() -> int:
     protected_model = rows("reports/protected_offload_model_summary.csv") if (ROOT / "reports/protected_offload_model_summary.csv").exists() else []
     protected_feature = rows("reports/protected_offload_functional_coverage.csv") if (ROOT / "reports/protected_offload_functional_coverage.csv").exists() else []
     protected_cross = rows("reports/protected_offload_cross_coverage.csv") if (ROOT / "reports/protected_offload_cross_coverage.csv").exists() else []
-    protected_mutations = rows("reports/protected_offload_mutations.csv") if (ROOT / "reports/protected_offload_mutations.csv").exists() else []
+    protected_mutations = rows("reports/protected_offload_integration_mutations.csv") if (ROOT / "reports/protected_offload_integration_mutations.csv").exists() else []
     protected_formal = rows("reports/protected_offload_formal.csv") if (ROOT / "reports/protected_offload_formal.csv").exists() else []
     protected_components = rows("reports/protected_offload_component_smoke.csv") if (ROOT / "reports/protected_offload_component_smoke.csv").exists() else []
     protected_firmware = rows("reports/protected_offload_firmware.csv") if (ROOT / "reports/protected_offload_firmware.csv").exists() else []
     protected_code = rows("reports/protected_offload_code_coverage.csv")[0] if (ROOT / "reports/protected_offload_code_coverage.csv").exists() else None
+    protected_shared = rows("reports/protected_shared_firmware.csv") if (ROOT / "reports/protected_shared_firmware.csv").exists() else []
+    protected_shared_random = rows("reports/protected_shared_random.csv") if (ROOT / "reports/protected_shared_random.csv").exists() else []
+    protected_compiler = rows("reports/protected_shared_compiler_matrix.csv") if (ROOT / "reports/protected_shared_compiler_matrix.csv").exists() else []
+    protected_cache = rows("reports/protected_cache_ownership.csv") if (ROOT / "reports/protected_cache_ownership.csv").exists() else []
+    protected_cache_negative = rows("reports/protected_cache_negative.csv") if (ROOT / "reports/protected_cache_negative.csv").exists() else []
+    protected_matched = rows("reports/protected_offload_matched_performance.csv") if (ROOT / "reports/protected_offload_matched_performance.csv").exists() else []
     branch_value = (
         f"{code['branch_hit']} / {code['branch_total']} ({code['branch_percent']}%)"
         if code["branch_percent"] != "NA" else "NA (Verilator 5.020 LCOV)"
@@ -106,6 +112,11 @@ def main() -> int:
             ("protected_offload_formal", f"{sum(r['status'] == 'PASS' for r in protected_formal)} / {len(protected_formal)}", "Bounded solver checks with reachable covers"),
             ("protected_offload_components", f"{sum(r['status'] == 'PASS' for r in protected_components)} / {len(protected_components)}", "Descriptor, queue, AXI adapter, and IOMMU checks"),
             ("protected_offload_firmware", f"{sum(r.get('execution_status') == 'PASS' for r in protected_firmware)} / {len(protected_firmware)}", "GCC-built RV32 APB/DMA execution matrix"),
+            ("protected_shared_fabric", f"{sum(r['status'] == 'PASS' for r in protected_shared)} / {len(protected_shared)}", "Firmware-owned host/DMA/PTW/QoS-fabric executions"),
+            ("protected_shared_random", f"{sum(r['status'] == 'PASS' for r in protected_shared_random)} / {len(protected_shared_random)}", "Seeded executable integration workloads"),
+            ("protected_shared_compiler", f"{sum(r['status'] == 'PASS' for r in protected_compiler)} / {len(protected_compiler)}", "RV32I/RV32IM crossed with O0/O2/Os"),
+            ("protected_cache_ownership", f"{sum(r['status'] == 'PASS' for r in protected_cache)} / {len(protected_cache)}; {sum(r['status'] == 'PASS' for r in protected_cache_negative)} / {len(protected_cache_negative)}", "Positive handoffs; intended-negative detections"),
+            ("protected_matched_performance", f"{sum(r['status'] == 'PASS' for r in protected_matched)} / {len(protected_matched)}", "Five matched RV32I/RV32IM/accelerator paths"),
         ])
         if protected_code:
             metrics.append(("protected_offload_code", f"raw {protected_code['line_hit']} / {protected_code['line_total']} ({protected_code['line_percent']}%)", protected_code["note"]))
@@ -149,6 +160,11 @@ def main() -> int:
         "protected_offload_components": "Protected-offload component checks",
         "protected_offload_firmware": "Protected-offload GCC/RV32 execution",
         "protected_offload_code": "Protected-offload line coverage",
+        "protected_shared_fabric": "Firmware-owned fabric execution",
+        "protected_shared_random": "Firmware-owned seeded integration",
+        "protected_shared_compiler": "RV32I/RV32IM compiler matrix",
+        "protected_cache_ownership": "Cached ownership positive / negative",
+        "protected_matched_performance": "Matched five-path performance",
     }
     table.extend(f"| {labels[key]} | `{value}` |" for key, value, _ in metrics)
     table.append(END)

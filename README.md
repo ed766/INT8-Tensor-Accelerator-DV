@@ -42,10 +42,15 @@ This project is the portfolio's ML/datapath example. It shows how a PyTorch mode
 | Protected-offload seeded RTL | `100 / 100` |
 | Protected-offload trace replay | `205 / 205` |
 | Protected-offload coverage / crosses | `77 / 77; 64 / 64` |
-| Protected-offload RTL mutations | `10 / 10` |
+| Protected-offload RTL mutations | `12 / 12` |
 | Protected-offload bounded properties | `10 / 10` |
 | Protected-offload component checks | `4 / 4` |
 | Protected-offload GCC/RV32 execution | `24 / 24` |
+| Firmware-owned fabric execution | `32 / 32` |
+| Firmware-owned seeded integration | `100 / 100` |
+| RV32I/RV32IM compiler matrix | `36 / 36` |
+| Cached ownership positive / negative | `8 / 8; 4 / 4` |
+| Matched five-path performance | `150 / 150` |
 | Protected-offload line coverage | `raw 289 / 341 (84.75%)` |
 <!-- END GENERATED METRICS -->
 
@@ -107,7 +112,15 @@ same-execution crosses, `10 / 10` mutation detections, and `10 / 10` solver
 properties. A `24 / 24` GCC matrix boots eight workflows at three optimization
 levels on RV32, traverses APB and the integrated two-level-walk IOMMU, and checks
 the result mailbox plus final memory. Focused checks additionally exercise the
-new 32-to-64-bit AXI lane adapter. See the [architecture and evidence boundary](docs/protected_offload.md)
+new 32-to-64-bit AXI lane adapter. The executable crossover additionally passes
+`32 / 32` firmware-owned fabric jobs, `36 / 36` RV32I/RV32IM compiler runs,
+`100 / 100` integration seeds, `8 / 8` cached ownership cases plus `4 / 4`
+detected negatives, `12 / 12` mutations, and a matched `150 / 150` five-path
+cycle study.
+
+![Matched RV32I/RV32IM/accelerator speedup](docs/images/protected_offload_matched_speedup.svg)
+
+See the [architecture and evidence boundary](docs/protected_offload.md)
 and [component compatibility audit](docs/protected_offload_compatibility.md).
 
 ## Architecture
