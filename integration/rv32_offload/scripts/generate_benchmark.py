@@ -5,7 +5,7 @@ import argparse, csv, hashlib, json
 from pathlib import Path
 import torch
 
-PATTERNS = ("random", "zeros", "sat_pos", "sat_neg", "alternating")
+PATTERNS = ("random", "zeros", "ones", "sat_pos", "sat_neg", "alternating")
 
 def rounded_shift(product: torch.Tensor, shift: torch.Tensor) -> torch.Tensor:
     mag = torch.abs(product)
@@ -25,6 +25,9 @@ def build(k: int, batch: int, pattern: str, seed: int):
     output_zp = torch.tensor([-4, 0, 7, 11], dtype=torch.int32)
     relu_mask = 0b1010
     if pattern == "zeros": x.zero_(); w.zero_(); bias.zero_(); input_zp = 0; weight_zp.zero_()
+    elif pattern == "ones":
+        x.fill_(1);w.fill_(1);bias.zero_();mult.fill_(1);shift.zero_()
+        input_zp=0;weight_zp.zero_();output_zp.zero_();relu_mask=0
     elif pattern == "sat_pos": x.fill_(127); w.fill_(127); bias.zero_(); input_zp = 0; weight_zp.zero_(); mult.fill_(7); shift.zero_()
     elif pattern == "sat_neg": x.fill_(-128); w.fill_(127); bias.zero_(); input_zp = 0; weight_zp.zero_(); mult.fill_(7); shift.zero_()
     elif pattern == "alternating":

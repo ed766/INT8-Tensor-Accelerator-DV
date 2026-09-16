@@ -1,11 +1,11 @@
 property,mode,depth,status,cover,runtime_s,detail
-request_response_accounting,bounded_solver_safety,16,PASS,REACHABLE,1.02,response count never exceeds accepted count
-single_outstanding_bound,bounded_solver_safety,16,PASS,REACHABLE,1.02,at most one DMA memory operation is active
-write_address_contract,bounded_solver_safety,16,PASS,REACHABLE,1.02,AW is aligned and describes one 32-bit transfer
-byte_lane_mapping,bounded_solver_safety,16,PASS,REACHABLE,1.02,32-bit writes select exactly one 64-bit data lane
-write_completion_order,bounded_solver_safety,16,PASS,REACHABLE,1.02,DMA response follows accepted AW and W
-read_address_contract,bounded_solver_safety,16,PASS,REACHABLE,1.02,AR is aligned and describes one 32-bit transfer
-read_completion_order,bounded_solver_safety,16,PASS,REACHABLE,1.02,DMA response follows an accepted AR
-response_backpressure_stability,bounded_solver_safety,16,PASS,REACHABLE,1.02,response payload remains stable while blocked
-queue_count_bounded,solver_combinational,1,PASS,REACHABLE,1.02,simultaneous and single-sided updates remain within depth
-simultaneous_push_pop_preserves_count,solver_combinational,1,PASS,REACHABLE,1.02,concurrent enqueue/dequeue has zero net occupancy change
+request_response_accounting,bounded_solver_safety,16,PASS,REACHABLE,1.04,response count never exceeds accepted count
+single_outstanding_bound,bounded_solver_safety,16,PASS,REACHABLE,1.04,at most one DMA memory operation is active
+write_address_contract,bounded_solver_safety,16,PASS,REACHABLE,1.04,AW is aligned and describes one 32-bit transfer
+byte_lane_mapping,bounded_solver_safety,16,PASS,REACHABLE,1.04,32-bit writes select exactly one 64-bit data lane
+write_completion_order,bounded_solver_safety,16,PASS,REACHABLE,1.04,DMA response follows accepted AW and W
+read_address_contract,bounded_solver_safety,16,PASS,REACHABLE,1.04,AR is aligned and describes one 32-bit transfer
+read_completion_order,bounded_solver_safety,16,PASS,REACHABLE,1.04,DMA response follows an accepted AR
+response_backpressure_stability,bounded_solver_safety,16,PASS,REACHABLE,1.04,response payload remains stable while blocked
+queue_count_bounded,solver_combinational,1,PASS,REACHABLE,1.04,simultaneous and single-sided updates remain within depth
+simultaneous_push_pop_preserves_count,solver_combinational,1,PASS,REACHABLE,1.04,concurrent enqueue/dequeue has zero net occupancy change

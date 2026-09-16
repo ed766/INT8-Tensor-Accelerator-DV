@@ -21,11 +21,13 @@
 #define TEST_CACHE 0
 #endif
 static volatile uint32_t irq_seen,irq_completion,irq_tag;
+static inline uint32_t cycle32(void){uint32_t v;__asm__ volatile("csrr %0,mcycle":"=r"(v));return v;}
 void __attribute__((interrupt("machine"))) trap_handler(void){
   irq_completion=DMA(32);irq_tag=DMA(40)&255u;DMA(44)=1;MMIO(0x4000200cu)=2;irq_seen=1;
 }
 static void cfg(uint32_t kind,uint32_t out,uint32_t index,uint32_t data){CFG(0)=kind;CFG(4)=out;CFG(8)=index;CFG(12)=data;CFG(20)=1;}
 int main(void){
+  uint32_t benchmark_start=cycle32();
   volatile uint32_t arithmetic_seed=TEST_K+TEST_BATCH+TEST_ASID;
   uint32_t arithmetic_check=(arithmetic_seed*7u)/(TEST_BATCH?TEST_BATCH:1u);
   if(arithmetic_check==0xffffffffu)return 1;
@@ -35,6 +37,9 @@ int main(void){
   for(uint32_t v=0;v<TEST_BATCH;v++){for(uint32_t i=0;i<TEST_K;i+=4)MMIO(0x10001000u+v*64u+i)=0x01010101u;MMIO(0x10004000u+v*4u)=0;}
   for(uint32_t o=0;o<4;o++){for(uint32_t i=0;i<TEST_K;i++)cfg(0,o,i,1);cfg(1,o,0,0);cfg(2,o,0,1);cfg(3,o,0,0);}
   CFG(16)=7;
+#ifdef TEST_WARM
+  benchmark_start=cycle32();
+#endif
 #if !defined(NEG_SKIP_FLUSH)
   if(TEST_CACHE){MMIO(0x40002100u)=0;MMIO(0x40002104u)=1;__asm__ volatile("fence");}
 #endif
@@ -53,6 +58,6 @@ int main(void){
   if(TEST_CACHE){MMIO(0x40002100u)=1;MMIO(0x40002104u)=1;__asm__ volatile("fence");}
 #endif
   uint32_t expected=(TEST_K&255u)*0x01010101u;for(uint32_t v=0;v<TEST_BATCH;v++)if(MMIO(0x10004000u+v*4u)!=expected)ok=0;
-  if(!TEST_IRQ)DMA(44)=1;MMIO(0x40001ff0u)=ok?0x600d5000u:0xdead5000u;MMIO(0x40001ff4u)=1;
+  if(!TEST_IRQ)DMA(44)=1;MMIO(0x40001fe0u)=cycle32()-benchmark_start;MMIO(0x40001ff0u)=ok?0x600d5000u:0xdead5000u;MMIO(0x40001ff4u)=1;
   for(;;)__asm__ volatile("nop");
 }

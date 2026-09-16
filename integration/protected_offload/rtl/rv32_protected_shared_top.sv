@@ -3,7 +3,8 @@ module rv32_protected_shared_top #(
   parameter int ROM_WORDS=4096,parameter int DATA_MEM_WORDS=4096,
   parameter bit USE_CACHE=0,parameter bit CPU_ENABLE_M=0
 )(input logic clk,input logic rst_n,output logic firmware_done,output logic[31:0]firmware_result,
-   output logic commit_valid,output logic[31:0]commit_pc,output logic irq,output logic[31:0]cycles);
+   output logic commit_valid,output logic[31:0]commit_pc,output logic irq,output logic[31:0]cycles,
+   output logic[31:0]benchmark_cycles);
   localparam int NM=4,NS=4,IDW=4,TIDW=6;
   logic instr_valid,instr_ready;logic[31:0]instr,commit_instr,commit_next_pc;
   logic[31:0]paddr,pwdata,prdata;logic psel,penable,pwrite,pready,pslverr;
@@ -23,7 +24,7 @@ module rv32_protected_shared_top #(
   logic maint_valid,maint_ready,maint_busy,maint_done,maint_error;logic[1:0]maint_cmd;logic[4:0]cache_state;logic cache_hit,cache_miss,cache_evict;logic[1:0]refill_beat,writeback_beat;
 
   assign dma_sel=psel&&paddr>=32'h4000_0000&&paddr<32'h4000_1000;
-  assign mail_sel=psel&&paddr>=32'h4000_1ff0&&paddr<32'h4000_2000;
+  assign mail_sel=psel&&paddr>=32'h4000_1fe0&&paddr<32'h4000_2000;
   assign cfg_sel=psel&&paddr>=32'h4000_1000&&paddr<32'h4000_2000&&!mail_sel;
   assign irq_sel=psel&&paddr>=32'h4000_2000&&paddr<32'h4000_2100;
   assign maint_sel=psel&&paddr>=32'h4000_2100&&paddr<32'h4000_2200;
@@ -47,7 +48,7 @@ module rv32_protected_shared_top #(
   protected_offload_service svc(.clk,.rst_n,.apb_addr(paddr[11:0]),.apb_sel(dma_sel),.apb_enable(penable),.apb_write(pwrite),.apb_wdata(pwdata),.apb_rdata(dma_rdata),.apb_ready(dma_ready),.apb_error(dma_error),.root_pt_addr(32'h3000_0000),.tlb_inv_valid(1'b0),.tlb_inv_all(1'b0),.tlb_inv_asid('0),.ptw_req_valid,.ptw_req_ready,.ptw_req_addr,.ptw_rsp_valid,.ptw_rsp_ready,.ptw_rsp_data,.ptw_rsp_error,.mem_req_valid,.mem_req_ready,.mem_req_write,.mem_req_addr,.mem_req_wdata,.mem_req_wstrb,.mem_req_qos,.mem_rsp_valid,.mem_rsp_ready,.mem_rsp_rdata,.mem_rsp_error,.cfg_valid,.cfg_ready,.cfg_kind,.cfg_bank,.cfg_output,.cfg_index,.cfg_data,.bank_generation,.irq(svc_irq),.busy,.submit_occupancy,.completion_occupancy,.perf_tlb_hits,.perf_tlb_misses,.perf_walk_reads,.perf_faults,.last_translation_tlb_hit(),.accel_command_error(),.perf_accel_accepted(),.perf_accel_completed(),.perf_accel_input_chunks(),.perf_accel_output_stalls(),.perf_accel_bank_swaps());
   protected_irq_aggregator irqs(.clk,.rst_n,.chiplet_dma_event(1'b0),.accelerator_event(svc_irq),.device_fault_event(1'b0),.paddr(paddr[5:0]),.psel(irq_sel),.penable,.pwrite,.pwdata,.prdata(irq_rdata),.pready(irq_ready),.pslverr(irq_error),.irq_ext(irq),.raw_status(irq_raw),.pending_status(irq_pending),.enable_mask(irq_enable));
   protected_cache_maintenance_apb maint(.clk,.rst_n,.paddr(paddr[5:0]),.psel(maint_sel),.penable,.pwrite,.pwdata,.prdata(maint_rdata),.pready(maint_ready_apb),.pslverr(maint_error_apb),.maint_valid,.maint_ready,.maint_cmd,.maint_busy,.maint_done,.maint_error);
-  always_ff @(posedge clk or negedge rst_n)begin if(!rst_n)begin firmware_done<=0;firmware_result<=0;cycles<=0;end else begin cycles<=cycles+1;if(mail_sel&&penable&&pwrite)begin if(paddr[3:0]==0)firmware_result<=pwdata;else if(paddr[3:0]==4)firmware_done<=pwdata[0];end end end
+  always_ff @(posedge clk or negedge rst_n)begin if(!rst_n)begin firmware_done<=0;firmware_result<=0;cycles<=0;benchmark_cycles<=0;end else begin cycles<=cycles+1;if(mail_sel&&penable&&pwrite)begin if(paddr[4:0]==0)benchmark_cycles<=pwdata;else if(paddr[3:0]==0)firmware_result<=pwdata;else if(paddr[3:0]==4)firmware_done<=pwdata[0];end end end
 
   generate if(!USE_CACHE)begin:uncached_host
    protected_host_axi_bridge #(.AXI_ID(0)) host(.clk,.rst_n,.psel(host_sel),.penable,.pwrite,.paddr,.pwdata,.prdata(host_rdata),.pready(host_ready),.pslverr(host_error),.awvalid(s_awvalid[0]),.awready(s_awready[0]),.awid(s_awid[0]),.awaddr(s_awaddr[0]),.awlen(s_awlen[0]),.awsize(s_awsize[0]),.awburst(s_awburst[0]),.awprot(s_awprot[0]),.awqos(s_awqos[0]),.wvalid(s_wvalid[0]),.wready(s_wready[0]),.wdata(s_wdata[0]),.wstrb(s_wstrb[0]),.wlast(s_wlast[0]),.bvalid(s_bvalid[0]),.bready(s_bready[0]),.bid(s_bid[0]),.bresp(s_bresp[0]),.arvalid(s_arvalid[0]),.arready(s_arready[0]),.arid(s_arid[0]),.araddr(s_araddr[0]),.arlen(s_arlen[0]),.arsize(s_arsize[0]),.arburst(s_arburst[0]),.arprot(s_arprot[0]),.arqos(s_arqos[0]),.rvalid(s_rvalid[0]),.rready(s_rready[0]),.rid(s_rid[0]),.rdata(s_rdata[0]),.rresp(s_rresp[0]),.rlast(s_rlast[0]));

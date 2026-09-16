@@ -54,10 +54,20 @@ a completion record, and holds a level interrupt until software pops that record
 | Shared integration coverage | `47 / 47` | Versioned executable predicates; separate from controller-model coverage |
 | Code coverage | raw `289 / 341` (`84.75%`); reviewed `289 / 289` (`100%`) | 52 declaration/interface/case-attribution exclusions remain denominator-visible |
 | Performance comparison rows | `45 / 45` | Scalar RV32I, MMIO stream, and autonomous DMA cycle evidence |
+| Matched five-path benchmark | `150 / 150` | Same tensors and `mcycle` contract: RV32I, RV32IM, MMIO stream, uncached DMA, cached DMA |
 
 | Executable job timeline | Device-cycle scaling |
 | --- | --- |
 | ![Normalized protected-offload event timeline](images/protected_offload_timeline.svg) | ![Measured protected DMA cycles](images/protected_offload_performance.svg) |
+
+The matched benchmark uses one all-ones tensor/quantization contract at five K
+values, three batch sizes, and cold/warm parameter modes. Its median measured
+speedups versus scalar RV32I are `1.171x` for RV32IM, `10.440x` for MMIO stream,
+`29.717x` for uncached shared DMA, and `23.722x` for cached shared DMA. These
+are same-clock behavioral cycle ratios, not frequency, power, FPGA, or silicon
+claims. Raw rows and hashes are in `protected_offload_matched_performance.csv`.
+
+![Matched five-path speedup](images/protected_offload_matched_speedup.svg)
 
 The checked-in GCC matrix separately records build and execution status, ELF
 hash, instruction image size, simulated cycles, and retired instructions. Each
@@ -121,6 +131,7 @@ make protected-offload-coverage
 make protected-offload-formal
 make protected-offload-mutations
 make protected-offload-performance
+make protected-offload-matched-performance
 make protected-offload-release-check
 ```
 

@@ -1,7 +1,7 @@
 PYTHON ?= $(shell if python3 -c 'import torch' >/dev/null 2>&1; then command -v python3; elif [ -x ../rl-venv/bin/python ]; then printf '%s' ../rl-venv/bin/python; else command -v python3; fi)
 VERILATOR ?= verilator
 
-.PHONY: vectors portable-vectors portable-check axi-integration-check model-selftest linear-demo mlp-demo fx-compiler-check lint regress streaming-check protocol-edges coverage code-coverage mutation-check formal-check performance-report synth-check docs-check project-check release-check rv32-benchmark-toolchain-check rv32-benchmark-build rv32-benchmark-smoke rv32-benchmark-check rv32-benchmark-sweep rv32-benchmark-backpressure rv32-benchmark-mutations rv32-benchmark-report rv32-benchmark-waveform rv32-benchmark-release-check protected-offload-provenance protected-offload-service-check protected-offload-smoke protected-offload-components protected-offload-directed protected-offload-firmware protected-offload-uvm protected-offload-random protected-offload-model-check protected-offload-formal protected-offload-mutations protected-offload-coverage protected-offload-code-coverage protected-offload-cache-ownership protected-offload-shared-compiler protected-offload-shared-random protected-offload-performance protected-offload-report protected-offload-release-check clean
+.PHONY: vectors portable-vectors portable-check axi-integration-check model-selftest linear-demo mlp-demo fx-compiler-check lint regress streaming-check protocol-edges coverage code-coverage mutation-check formal-check performance-report synth-check docs-check project-check release-check rv32-benchmark-toolchain-check rv32-benchmark-build rv32-benchmark-smoke rv32-benchmark-check rv32-benchmark-sweep rv32-benchmark-backpressure rv32-benchmark-mutations rv32-benchmark-report rv32-benchmark-waveform rv32-benchmark-release-check protected-offload-provenance protected-offload-service-check protected-offload-smoke protected-offload-components protected-offload-directed protected-offload-firmware protected-offload-uvm protected-offload-random protected-offload-model-check protected-offload-formal protected-offload-mutations protected-offload-coverage protected-offload-code-coverage protected-offload-cache-ownership protected-offload-shared-compiler protected-offload-shared-random protected-offload-performance protected-offload-matched-performance protected-offload-report protected-offload-release-check clean
 
 vectors:
 	$(PYTHON) scripts/generate_vectors.py
@@ -127,6 +127,9 @@ protected-offload-formal:
 
 protected-offload-mutations:
 	$(PYTHON) integration/protected_offload/scripts/run_mutations.py
+	$(PYTHON) integration/protected_offload/scripts/run_shared_firmware.py --define PROTECTED_MUT_FALSE_MAINTENANCE
+	$(PYTHON) integration/protected_offload/scripts/run_shared_firmware.py --define PROTECTED_MUT_CACHE_RESPONSE_CORRUPT
+	$(PYTHON) integration/protected_offload/scripts/merge_integration_mutations.py
 
 protected-offload-coverage: protected-offload-model-check
 	$(PYTHON) integration/protected_offload/scripts/generate_coverage.py
@@ -139,11 +142,16 @@ protected-offload-performance:
 	$(PYTHON) integration/protected_offload/scripts/generate_performance.py
 	$(PYTHON) integration/protected_offload/scripts/generate_visuals.py
 
+protected-offload-matched-performance: protected-offload-provenance
+	$(PYTHON) integration/protected_offload/scripts/run_shared_firmware.py --benchmark
+	$(PYTHON) integration/protected_offload/scripts/run_matched_performance.py
+	$(PYTHON) integration/protected_offload/scripts/generate_matched_visual.py
+
 protected-offload-report:
 	$(PYTHON) scripts/generate_metrics.py
 	$(PYTHON) scripts/check_docs.py
 
-protected-offload-release-check: protected-offload-provenance protected-offload-service-check protected-offload-shared-matrix protected-offload-cache-ownership protected-offload-shared-compiler protected-offload-shared-random protected-offload-smoke protected-offload-components protected-offload-firmware protected-offload-coverage protected-offload-code-coverage protected-offload-formal protected-offload-mutations protected-offload-performance protected-offload-report
+protected-offload-release-check: protected-offload-provenance protected-offload-service-check protected-offload-shared-matrix protected-offload-cache-ownership protected-offload-shared-compiler protected-offload-shared-random protected-offload-smoke protected-offload-components protected-offload-firmware protected-offload-coverage protected-offload-code-coverage protected-offload-formal protected-offload-mutations protected-offload-performance protected-offload-matched-performance protected-offload-report
 	git diff --check
 
 regress: vectors

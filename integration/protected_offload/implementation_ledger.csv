@@ -11,4 +11,7 @@ B-IRQ,Machine interrupt aggregation and WFI,PASS,protected-offload-shared-matrix
 C-CACHE,Baseline L1 ownership discipline,PASS,protected-offload-cache-ownership,8/8 positive and 4/4 intended-negative ownership cases,
 C-COMPILER,RV32I/RV32IM compiler matrix,PASS,protected-offload-shared-compiler,36/36 O0 O2 Os executable fabric workflows,
 C-RANDOM,Constrained executable shared-memory workloads,PASS,protected-offload-shared-random,100/100 deterministic seeded workflows and 47/47 integration coverage points/crosses,
-C-PERFORMANCE,Matched five-path benchmark,NOT_RUN,protected-offload-matched-performance,no canonical report,cached and uncached paths required
+C-PERFORMANCE,Matched five-path benchmark,PASS,protected-offload-matched-performance,150/150 matched all-ones tensor rows across RV32I RV32IM MMIO uncached DMA and cached DMA,
+C-COMBINED-HOST,Optional chiplet AES plus INT8 firmware orchestration,NOT_RUN,compute-host-check,no canonical report,requires chiplet-side service import and combined firmware
+C-INTEGRATION-MUTATIONS,Twelve crossover-specific RTL mutations,PASS,protected-offload-mutations,12/12 service cache-maintenance and cached-response mutations detected,
+C-ERROR-RESET,Executable shared-fabric error reset and context-update matrix,PARTIAL,protected-offload-components,component checks pass; full firmware-owned matrix absent,

@@ -1,10 +1,10 @@
 `timescale 1ns/1ps
-module tb_rv32_int8_benchmark;
+module tb_rv32_int8_benchmark #(parameter bit CPU_ENABLE_M=1'b0);
   logic clk=0,rst_n=0;always #5 clk=~clk;
   logic firmware_done,commit_valid,halted;logic[31:0]firmware_result,commit_pc,commit_instr;
   logic[31:0]benchmark_stats[0:15];integer cycles=0;string wave_file;integer expect_batch=1,expect_k=4;
   logic previous_out_valid=0;
-  rv32_int8_benchmark_top dut(.*);
+  rv32_int8_benchmark_top #(.CPU_ENABLE_M(CPU_ENABLE_M)) dut(.*);
   always @(posedge clk) begin
     if (rst_n && dut.awvalid && dut.awready && dut.awaddr==8'h08)
       $display("BENCH_EVENT|cycle=%0d|event=command_aw",cycles);

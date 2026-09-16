@@ -21,9 +21,9 @@ def words(binary:Path, output:Path, base:int|None=None):
     lines.extend(f"{int.from_bytes(data[i:i+4],'little'):08x}" for i in range(0,len(data),4));output.write_text("\n".join(lines)+"\n")
 
 def main()->int:
-    ap=argparse.ArgumentParser();ap.add_argument("--scenario-dir",type=Path,required=True);ap.add_argument("--mutation",default="");args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument("--scenario-dir",type=Path,required=True);ap.add_argument("--mutation",default="");ap.add_argument("--rv32m",action="store_true");args=ap.parse_args()
     out=args.scenario_dir;gcc,objcopy,nm=(tool(x) for x in ("gcc","objcopy","nm"));elf=out/"benchmark.elf"
-    command=[gcc,"-march=rv32i_zicsr","-mabi=ilp32","-O2","-g","-ffreestanding","-nostdlib","-fno-builtin","-fno-pic","-fno-stack-protector","-msmall-data-limit=0","-mno-relax",f"-I{out}",str(FW/"crt0.S"),str(FW/"runtime.c"),str(FW/"benchmark.c"),f"-T{FW/'link.ld'}","-Wl,--build-id=none","-Wl,-Map="+str(out/"benchmark.map"),"-o",str(elf)]
+    command=[gcc,"-march="+("rv32im_zicsr" if args.rv32m else "rv32i_zicsr"),"-mabi=ilp32","-O2","-g","-ffreestanding","-nostdlib","-fno-builtin","-fno-pic","-fno-stack-protector","-msmall-data-limit=0","-mno-relax",f"-I{out}",str(FW/"crt0.S"),str(FW/"runtime.c"),str(FW/"benchmark.c"),f"-T{FW/'link.ld'}","-Wl,--build-id=none","-Wl,-Map="+str(out/"benchmark.map"),"-o",str(elf)]
     if args.mutation=="scalar_round":command.insert(1,"-DRV32_BENCH_MUT_SCALAR_ROUND")
     if args.mutation=="corrupt_result":command.insert(1,"-DRV32_BENCH_MUT_CORRUPT_RESULT")
     subprocess.run(command,check=True)

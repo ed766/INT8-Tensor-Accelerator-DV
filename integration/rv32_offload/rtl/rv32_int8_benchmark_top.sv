@@ -2,7 +2,8 @@
 
 module rv32_int8_benchmark_top #(
   parameter int ROM_WORDS = 4096,
-  parameter int DATA_MEM_WORDS = 4096
+  parameter int DATA_MEM_WORDS = 4096,
+  parameter bit CPU_ENABLE_M = 1'b0
 ) (
   input logic clk, input logic rst_n,
   output logic firmware_done, output logic [31:0] firmware_result,
@@ -27,7 +28,7 @@ module rv32_int8_benchmark_top #(
 
   rv32_core #(.MMIO_BASE(32'h4000_0000),.MMIO_END(32'h4000_01ff),
     .DATA_MEM_WORDS(DATA_MEM_WORDS),.MAILBOX_ALIAS_BASE(32'h0000_8000),
-    .ENABLE_TRAPS(1'b0),.EBREAK_TEST_HALT(1'b1)) cpu (
+    .ENABLE_TRAPS(1'b0),.EBREAK_TEST_HALT(1'b1),.ENABLE_M(CPU_ENABLE_M)) cpu (
     .clk,.rst_n,.instr_valid,.instr_ready,.instr,.irq_ext(1'b0),.irq_timer(1'b0),
     .paddr,.psel,.penable,.pwrite,.pwdata,.prdata,.pready,.pslverr,
     .commit_valid,.commit_instr,.commit_pc,.commit_next_pc,.halted,
