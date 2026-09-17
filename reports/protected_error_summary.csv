@@ -1,0 +1,3 @@
+scenario,status,seed,optimizer,isa,k,batch,mode,asid,qos,completion_mode,cache,reset_at,cycles,benchmark_cycles,expected_negative,elf_sha256,evidence
+input_pte_fault,PASS,0,O2,rv32i_zicsr,16,2,cold,1,8,poll,0,-1,2811,2755,none,821ecd55b4ac02412769800528528bd5f3957365fa927b676b1ca5fb4d5ac340,PROTECTED_SHARED|status=PASS|commits=641|cycles=2811|benchmark_cycles=2755|k=16|batch=2|cache=0|rv32m=0|reset=0|host=1|dma=1|ptw=1|fabric=1
+output_pte_fault,PASS,0,O2,rv32i_zicsr,16,2,cold,1,8,poll,0,-1,2855,2799,none,75821e05836db13f1e3e185015bd6f0225d3536c9dcc91c8ed2d231053b71a98,PROTECTED_SHARED|status=PASS|commits=653|cycles=2855|benchmark_cycles=2799|k=16|batch=2|cache=0|rv32m=0|reset=0|host=1|dma=1|ptw=1|fabric=1

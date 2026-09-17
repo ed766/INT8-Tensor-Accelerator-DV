@@ -41,8 +41,11 @@ firmware phases. Each run restarts the ROM program, reinitializes
 firmware-owned page tables and buffers through the host bridge, and reaches the
 normal mailbox without accepting a pre-reset completion. The separately
 reported [`protected_error_reset_summary.csv`](../reports/protected_error_reset_summary.csv)
-is reset evidence only. It does not claim the larger page-walk, partial-output,
-or explicit context-update recovery matrix, which remains an open extension.
+is reset evidence only. `make protected-offload-error` additionally invalidates
+the firmware-owned input or output PTE after setup; both jobs report a DMA
+error completion while the output buffer remains unchanged. Permission remap,
+partial-output recovery, and explicit context-update retry remain open
+extensions.
 
 This optional integration lane turns the tensor engine into a memory-to-memory
 device. Software snapshots a descriptor through APB, the four-entry DMA queue
@@ -139,6 +142,7 @@ make protected-offload-service-check
 make protected-offload-shared-matrix
 make protected-offload-shared-compiler
 make protected-offload-shared-random
+make protected-offload-error
 make protected-offload-error-reset
 make compute-host-check
 make protected-offload-cache-ownership

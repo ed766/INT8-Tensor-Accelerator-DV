@@ -35,6 +35,12 @@ int main(void){
   MMIO(0x30000800u)=0x0c000401u;
   MMIO(0x30001004u)=0x040004cfu;
   MMIO(0x30001010u)=0x040010cfu;
+#ifdef TEST_INPUT_PTE_FAULT
+  MMIO(0x30001004u)=0u;
+#endif
+#ifdef TEST_OUTPUT_PTE_FAULT
+  MMIO(0x30001010u)=0u;
+#endif
   for(uint32_t v=0;v<TEST_BATCH;v++){for(uint32_t i=0;i<TEST_K;i+=4)MMIO(0x10001000u+v*64u+i)=0x01010101u;MMIO(0x10004000u+v*4u)=0;}
   for(uint32_t o=0;o<4;o++){for(uint32_t i=0;i<TEST_K;i++)cfg(0,o,i,1);cfg(1,o,0,0);cfg(2,o,0,1);cfg(3,o,0,0);}
   CFG(16)=7;
@@ -60,13 +66,23 @@ int main(void){
 #endif
   if(TEST_IRQ){while(!irq_seen)__asm__ volatile("wfi");}else while((DMA(28)&4u)==0u){}
   uint32_t c=TEST_IRQ?irq_completion:DMA(32),tag=TEST_IRQ?irq_tag:(DMA(40)&255u),ok=((c&15u)==0u)&&(((c>>12)&127u)==TEST_BATCH)&&(tag==0x35u);
+#if defined(TEST_INPUT_PTE_FAULT) || defined(TEST_OUTPUT_PTE_FAULT)
+  ok=((c&15u)!=0u)&&(tag==0x35u);
+#endif
 #ifdef NEG_LATE_DIRTY
   MMIO(0x10004000u)=0x99999999u;MMIO(0x40002100u)=0;MMIO(0x40002104u)=1;
 #endif
 #if !defined(NEG_SKIP_INVALIDATE)
   if(TEST_CACHE){MMIO(0x40002100u)=1;MMIO(0x40002104u)=1;__asm__ volatile("fence");}
 #endif
-  uint32_t expected=(TEST_K&255u)*0x01010101u;for(uint32_t v=0;v<TEST_BATCH;v++)if(MMIO(0x10004000u+v*4u)!=expected)ok=0;
+  uint32_t expected=(TEST_K&255u)*0x01010101u;
+  for(uint32_t v=0;v<TEST_BATCH;v++) {
+#if defined(TEST_INPUT_PTE_FAULT) || defined(TEST_OUTPUT_PTE_FAULT)
+    if(MMIO(0x10004000u+v*4u)!=0u)ok=0;
+#else
+    if(MMIO(0x10004000u+v*4u)!=expected)ok=0;
+#endif
+  }
 #ifdef TEST_COMBINED_HOST
   while(CHIP(0x38)==0u){}
   if((CHIP(0x3c)&15u)!=0u||CHIP(0x40)!=4u)ok=0;

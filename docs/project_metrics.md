@@ -42,6 +42,7 @@
 | `protected_matched_performance` | 150 / 150 | Five matched RV32I/RV32IM/accelerator paths |
 | `protected_compute_host` | 2 / 2 | One GCC RV32I core orchestrates chiplet DMA plus protected INT8 |
 | `protected_reset_epochs` | 4 / 4 | Firmware reboot after deterministic reset injection |
+| `protected_page_faults` | 2 / 2 | Firmware-owned invalid input/output PTE containment |
 | `protected_offload_code` | raw 289 / 341 (84.75%) | reviewed=289/289 (100.00%); exclusions=52; merged from 106 executable runs |
 
 All values are regenerated from checked-in CSV evidence by `make release-check`.

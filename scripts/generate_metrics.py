@@ -67,6 +67,7 @@ def main() -> int:
     protected_matched = rows("reports/protected_offload_matched_performance.csv") if (ROOT / "reports/protected_offload_matched_performance.csv").exists() else []
     protected_compute_host = rows("reports/compute_host_summary.csv") if (ROOT / "reports/compute_host_summary.csv").exists() else []
     protected_error_reset = rows("reports/protected_error_reset_summary.csv") if (ROOT / "reports/protected_error_reset_summary.csv").exists() else []
+    protected_error = rows("reports/protected_error_summary.csv") if (ROOT / "reports/protected_error_summary.csv").exists() else []
     branch_value = (
         f"{code['branch_hit']} / {code['branch_total']} ({code['branch_percent']}%)"
         if code["branch_percent"] != "NA" else "NA (Verilator 5.020 LCOV)"
@@ -121,6 +122,7 @@ def main() -> int:
             ("protected_matched_performance", f"{sum(r['status'] == 'PASS' for r in protected_matched)} / {len(protected_matched)}", "Five matched RV32I/RV32IM/accelerator paths"),
             ("protected_compute_host", f"{sum(r['status'] == 'PASS' for r in protected_compute_host)} / {len(protected_compute_host)}", "One GCC RV32I core orchestrates chiplet DMA plus protected INT8"),
             ("protected_reset_epochs", f"{sum(r['status'] == 'PASS' for r in protected_error_reset)} / {len(protected_error_reset)}", "Firmware reboot after deterministic reset injection"),
+            ("protected_page_faults", f"{sum(r['status'] == 'PASS' for r in protected_error)} / {len(protected_error)}", "Firmware-owned invalid input/output PTE containment"),
         ])
         if protected_code:
             metrics.append(("protected_offload_code", f"raw {protected_code['line_hit']} / {protected_code['line_total']} ({protected_code['line_percent']}%)", protected_code["note"]))
@@ -171,6 +173,7 @@ def main() -> int:
         "protected_matched_performance": "Matched five-path performance",
         "protected_compute_host": "Single-core chiplet + INT8 orchestration",
         "protected_reset_epochs": "Firmware reset epochs",
+        "protected_page_faults": "Firmware page-table fault containment",
     }
     table.extend(f"| {labels[key]} | `{value}` |" for key, value, _ in metrics)
     table.append(END)
