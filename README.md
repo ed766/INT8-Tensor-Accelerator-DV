@@ -53,7 +53,7 @@ This project is the portfolio's ML/datapath example. It shows how a PyTorch mode
 | Matched five-path performance | `150 / 150` |
 | Single-core chiplet + INT8 orchestration | `2 / 2` |
 | Firmware reset epochs | `4 / 4` |
-| Firmware page-table fault containment | `2 / 2` |
+| Firmware page-table recovery | `4 / 4` |
 | Protected-offload line coverage | `raw 289 / 341 (84.75%)` |
 <!-- END GENERATED METRICS -->
 

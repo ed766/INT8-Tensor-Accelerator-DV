@@ -41,7 +41,22 @@ int main(void){
 #ifdef TEST_OUTPUT_PTE_FAULT
   MMIO(0x30001010u)=0u;
 #endif
-  for(uint32_t v=0;v<TEST_BATCH;v++){for(uint32_t i=0;i<TEST_K;i+=4)MMIO(0x10001000u+v*64u+i)=0x01010101u;MMIO(0x10004000u+v*4u)=0;}
+#ifdef TEST_OUTPUT_PERMISSION_FAULT
+  /* Valid/readable leaf with write permission deliberately removed. */
+  MMIO(0x30001010u)=0x040010c3u;
+#endif
+#ifdef TEST_PARTIAL_OUTPUT_RETRY
+  /* Vector zero remains writable; vector one maps to the error target. */
+  MMIO(0x30001014u)=0x080000cfu;
+#endif
+  for(uint32_t v=0;v<TEST_BATCH;v++){
+    for(uint32_t i=0;i<TEST_K;i+=4)MMIO(0x10001000u+v*64u+i)=0x01010101u;
+#ifdef TEST_PARTIAL_OUTPUT_RETRY
+    MMIO(v ? 0x10008000u : 0x10004000u)=0;
+#else
+    MMIO(0x10004000u+v*4u)=0;
+#endif
+  }
   for(uint32_t o=0;o<4;o++){for(uint32_t i=0;i<TEST_K;i++)cfg(0,o,i,1);cfg(1,o,0,0);cfg(2,o,0,1);cfg(3,o,0,0);}
   CFG(16)=7;
 #ifdef TEST_COMBINED_HOST
@@ -58,7 +73,13 @@ int main(void){
 #if !defined(NEG_SKIP_FLUSH)
   if(TEST_CACHE){MMIO(0x40002100u)=0;MMIO(0x40002104u)=1;__asm__ volatile("fence");}
 #endif
-  DMA(0)=0x80001000u;DMA(4)=0x80004000u;DMA(8)=(4u<<16)|64u;DMA(12)=(TEST_BATCH<<7)|TEST_K;
+  DMA(0)=0x80001000u;DMA(4)=0x80004000u;
+#ifdef TEST_PARTIAL_OUTPUT_RETRY
+  DMA(8)=(4096u<<16)|64u;
+#else
+  DMA(8)=(4u<<16)|64u;
+#endif
+  DMA(12)=(TEST_BATCH<<7)|TEST_K;
   if(TEST_IRQ){uintptr_t v=(uintptr_t)trap_handler;__asm__ volatile("csrw mtvec,%0"::"r"(v));MMIO(0x40002008u)=2;__asm__ volatile("li t0,0x800; csrs mie,t0; csrsi mstatus,8":::"t0");}
   DMA(16)=(7u<<17)|(TEST_ASID<<8)|0x35u;DMA(20)=TEST_QOS;DMA(24)=1;
 #ifdef NEG_ACCESS_DURING
@@ -66,8 +87,20 @@ int main(void){
 #endif
   if(TEST_IRQ){while(!irq_seen)__asm__ volatile("wfi");}else while((DMA(28)&4u)==0u){}
   uint32_t c=TEST_IRQ?irq_completion:DMA(32),tag=TEST_IRQ?irq_tag:(DMA(40)&255u),ok=((c&15u)==0u)&&(((c>>12)&127u)==TEST_BATCH)&&(tag==0x35u);
-#if defined(TEST_INPUT_PTE_FAULT) || defined(TEST_OUTPUT_PTE_FAULT)
+#if defined(TEST_INPUT_PTE_FAULT) || defined(TEST_OUTPUT_PTE_FAULT) || defined(TEST_OUTPUT_PERMISSION_FAULT)
   ok=((c&15u)!=0u)&&(tag==0x35u);
+#endif
+#ifdef TEST_PARTIAL_OUTPUT_RETRY
+  /* The first vector committed before the second output translation fault. */
+  ok=((c&15u)!=0u)&&(((c>>12)&127u)==1u)&&(tag==0x35u);
+  DMA(44)=1;                         /* Completion consumption permits tag reuse. */
+  MMIO(0x30001014u)=0x040020cfu;     /* Repair vector-one physical mapping. */
+  MMIO(0x40002200u)=(TEST_ASID<<8)|1u; /* Targeted invalidate after the service drains. */
+  while((MMIO(0x40002204u)&1u)!=0u){}
+  DMA(24)=1;                         /* Same descriptor/tag is now a legal retry. */
+  while((DMA(28)&4u)==0u){}
+  c=DMA(32);tag=DMA(40)&255u;
+  ok=ok&&((c&15u)==0u)&&(((c>>12)&127u)==TEST_BATCH)&&(tag==0x35u);
 #endif
 #ifdef NEG_LATE_DIRTY
   MMIO(0x10004000u)=0x99999999u;MMIO(0x40002100u)=0;MMIO(0x40002104u)=1;
@@ -77,10 +110,14 @@ int main(void){
 #endif
   uint32_t expected=(TEST_K&255u)*0x01010101u;
   for(uint32_t v=0;v<TEST_BATCH;v++) {
-#if defined(TEST_INPUT_PTE_FAULT) || defined(TEST_OUTPUT_PTE_FAULT)
+#if defined(TEST_INPUT_PTE_FAULT) || defined(TEST_OUTPUT_PTE_FAULT) || defined(TEST_OUTPUT_PERMISSION_FAULT)
     if(MMIO(0x10004000u+v*4u)!=0u)ok=0;
 #else
+#ifdef TEST_PARTIAL_OUTPUT_RETRY
+    if(MMIO(v ? 0x10008000u : 0x10004000u)!=expected)ok=0;
+#else
     if(MMIO(0x10004000u+v*4u)!=expected)ok=0;
+#endif
 #endif
   }
 #ifdef TEST_COMBINED_HOST

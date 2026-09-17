@@ -41,11 +41,14 @@ firmware phases. Each run restarts the ROM program, reinitializes
 firmware-owned page tables and buffers through the host bridge, and reaches the
 normal mailbox without accepting a pre-reset completion. The separately
 reported [`protected_error_reset_summary.csv`](../reports/protected_error_reset_summary.csv)
-is reset evidence only. `make protected-offload-error` additionally invalidates
-the firmware-owned input or output PTE after setup; both jobs report a DMA
-error completion while the output buffer remains unchanged. Permission remap,
-partial-output recovery, and explicit context-update retry remain open
-extensions.
+is reset evidence only. `make protected-offload-error` runs four firmware-owned
+recovery cases: invalid input PTE, invalid output PTE, output write-permission
+denial, and partial-output recovery. The final case commits vector zero, faults
+vector one through the error target, reads the completion count/status, pops the
+failed completion, repairs the vector-one PTE, performs a targeted ASID TLB
+invalidation, and resubmits the same tag. The final retry verifies both output
+locations. This is bounded software recovery evidence, not a general IOMMU
+driver or transactional rollback claim.
 
 This optional integration lane turns the tensor engine into a memory-to-memory
 device. Software snapshots a descriptor through APB, the four-entry DMA queue

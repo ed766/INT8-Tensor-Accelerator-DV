@@ -15,4 +15,4 @@ C-PERFORMANCE,Matched five-path benchmark,PASS,protected-offload-matched-perform
 C-COMBINED-HOST,Optional chiplet AES plus INT8 firmware orchestration,PASS,compute-host-check,reports/compute_host_summary.csv,single RV32 configures chiplet DMA and protected INT8 service
 C-INTEGRATION-MUTATIONS,Twelve crossover-specific RTL mutations,PASS,protected-offload-mutations,12/12 service cache-maintenance and cached-response mutations detected,
 C-ERROR-RESET,Executable shared-fabric reset epoch matrix,PASS,protected-offload-error-reset,reports/protected_error_reset_summary.csv,four reset phases reboot firmware without a ghost completion
-C-ERROR-CONTEXT,Firmware page-table error containment,PARTIAL,protected-offload-error,reports/protected_error_summary.csv,input/output invalid-PTE containment passes; permission remap and retry ABI remain open
+C-ERROR-CONTEXT,Firmware page-table and partial-output recovery,PASS,protected-offload-error,reports/protected_error_summary.csv,invalid/permission PTE faults plus partial-output remap invalidate and same-tag retry pass
