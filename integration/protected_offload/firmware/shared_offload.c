@@ -2,6 +2,7 @@
 #define MMIO(a) (*(volatile uint32_t *)(uintptr_t)(a))
 #define DMA(o) MMIO(0x40000000u+(o))
 #define CFG(o) MMIO(0x40001000u+(o))
+#define CHIP(o) MMIO(0x50000000u+(o))
 #ifndef TEST_K
 #define TEST_K 4u
 #endif
@@ -37,6 +38,14 @@ int main(void){
   for(uint32_t v=0;v<TEST_BATCH;v++){for(uint32_t i=0;i<TEST_K;i+=4)MMIO(0x10001000u+v*64u+i)=0x01010101u;MMIO(0x10004000u+v*4u)=0;}
   for(uint32_t o=0;o<4;o++){for(uint32_t i=0;i<TEST_K;i++)cfg(0,o,i,1);cfg(1,o,0,0);cfg(2,o,0,1);cfg(3,o,0,0);}
   CFG(16)=7;
+#ifdef TEST_COMBINED_HOST
+  for(volatile uint32_t wake=0;wake<64;wake++)__asm__ volatile("nop");
+  for(uint32_t i=0;i<4;i++){
+    CHIP(0x20)=i;CHIP(0x24)=0;CHIP(0x28)=0x11111111u+i;CHIP(0x2c)=0x22222222u+i;CHIP(0x58)=3;
+    for(volatile uint32_t settle=0;settle<8;settle++)__asm__ volatile("nop");
+  }
+  CHIP(0x08)=0;CHIP(0x0c)=32;CHIP(0x10)=4;CHIP(0x14)=0x123;CHIP(0x00)=1;
+#endif
 #ifdef TEST_WARM
   benchmark_start=cycle32();
 #endif
@@ -58,6 +67,11 @@ int main(void){
   if(TEST_CACHE){MMIO(0x40002100u)=1;MMIO(0x40002104u)=1;__asm__ volatile("fence");}
 #endif
   uint32_t expected=(TEST_K&255u)*0x01010101u;for(uint32_t v=0;v<TEST_BATCH;v++)if(MMIO(0x10004000u+v*4u)!=expected)ok=0;
+#ifdef TEST_COMBINED_HOST
+  while(CHIP(0x38)==0u){}
+  if((CHIP(0x3c)&15u)!=0u||CHIP(0x40)!=4u)ok=0;
+  CHIP(0x44)=1;
+#endif
   if(!TEST_IRQ)DMA(44)=1;MMIO(0x40001fe0u)=cycle32()-benchmark_start;MMIO(0x40001ff0u)=ok?0x600d5000u:0xdead5000u;MMIO(0x40001ff4u)=1;
   for(;;)__asm__ volatile("nop");
 }

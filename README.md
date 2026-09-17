@@ -44,13 +44,15 @@ This project is the portfolio's ML/datapath example. It shows how a PyTorch mode
 | Protected-offload coverage / crosses | `77 / 77; 64 / 64` |
 | Protected-offload RTL mutations | `12 / 12` |
 | Protected-offload bounded properties | `10 / 10` |
-| Protected-offload component checks | `4 / 4` |
+| Protected-offload component checks | `3 / 4` |
 | Protected-offload GCC/RV32 execution | `24 / 24` |
 | Firmware-owned fabric execution | `32 / 32` |
 | Firmware-owned seeded integration | `100 / 100` |
 | RV32I/RV32IM compiler matrix | `36 / 36` |
 | Cached ownership positive / negative | `8 / 8; 4 / 4` |
 | Matched five-path performance | `150 / 150` |
+| Single-core chiplet + INT8 orchestration | `2 / 2` |
+| Firmware reset epochs | `4 / 4` |
 | Protected-offload line coverage | `raw 289 / 341 (84.75%)` |
 <!-- END GENERATED METRICS -->
 

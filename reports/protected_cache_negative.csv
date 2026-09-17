@@ -1,5 +1,5 @@
-scenario,status,seed,optimizer,isa,k,batch,mode,asid,qos,completion_mode,cache,cycles,benchmark_cycles,expected_negative,elf_sha256,evidence
-neg_skip_flush,PASS,0,O2,rv32i_zicsr,4,1,cold,1,0,poll,1,0,0,NEG_SKIP_FLUSH,bf411a73d55e289a7821b018badd9217757dba63481aa253a921a127cf342f57,detected:NEG_SKIP_FLUSH
-neg_skip_invalidate,PASS,0,O2,rv32i_zicsr,4,1,cold,1,0,poll,1,0,0,NEG_SKIP_INVALIDATE,2188609a1843e50a850719a96d0f25f6908a87551899cff6f230514dbe64d2f1,detected:NEG_SKIP_INVALIDATE
-neg_late_dirty,PASS,0,O2,rv32i_zicsr,4,1,cold,1,0,poll,1,0,0,NEG_LATE_DIRTY,99a72bd2c2097993f730c9f3a5545718bcdb9308ff37aece46725cd244d7a689,detected:NEG_LATE_DIRTY
-neg_access_during,PASS,0,O2,rv32i_zicsr,4,1,cold,1,0,poll,1,0,0,NEG_ACCESS_DURING,96f6eab3a10f1566a07e88187d92a4689a3d32042299f7994ee42b1e3d137fd2,detected:NEG_ACCESS_DURING
+scenario,status,seed,optimizer,isa,k,batch,mode,asid,qos,completion_mode,cache,reset_at,cycles,benchmark_cycles,expected_negative,elf_sha256,evidence
+neg_skip_flush,PASS,0,O2,rv32i_zicsr,4,1,cold,1,0,poll,1,-1,0,0,NEG_SKIP_FLUSH,bf411a73d55e289a7821b018badd9217757dba63481aa253a921a127cf342f57,detected:NEG_SKIP_FLUSH
+neg_skip_invalidate,PASS,0,O2,rv32i_zicsr,4,1,cold,1,0,poll,1,-1,0,0,NEG_SKIP_INVALIDATE,2188609a1843e50a850719a96d0f25f6908a87551899cff6f230514dbe64d2f1,detected:NEG_SKIP_INVALIDATE
+neg_late_dirty,PASS,0,O2,rv32i_zicsr,4,1,cold,1,0,poll,1,-1,0,0,NEG_LATE_DIRTY,99a72bd2c2097993f730c9f3a5545718bcdb9308ff37aece46725cd244d7a689,detected:NEG_LATE_DIRTY
+neg_access_during,PASS,0,O2,rv32i_zicsr,4,1,cold,1,0,poll,1,-1,0,0,NEG_ACCESS_DURING,96f6eab3a10f1566a07e88187d92a4689a3d32042299f7994ee42b1e3d137fd2,detected:NEG_ACCESS_DURING

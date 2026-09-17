@@ -1,24 +1,27 @@
 `timescale 1ns/1ps
 module rv32_protected_shared_top #(
   parameter int ROM_WORDS=4096,parameter int DATA_MEM_WORDS=4096,
-  parameter bit USE_CACHE=0,parameter bit CPU_ENABLE_M=0
+  parameter bit USE_CACHE=0,parameter bit CPU_ENABLE_M=0,parameter bit ENABLE_CHIPLET=0
 )(input logic clk,input logic rst_n,output logic firmware_done,output logic[31:0]firmware_result,
    output logic commit_valid,output logic[31:0]commit_pc,output logic irq,output logic[31:0]cycles,
-   output logic[31:0]benchmark_cycles);
+   output logic[31:0]benchmark_cycles,output logic chip_active_debug,output logic[2:0]chip_state_debug,
+   output logic[2:0]chip_submit_debug,output logic[2:0]chip_comp_debug,output logic[8:0]chip_send_debug,
+   output logic[8:0]chip_recv_debug,output logic chip_link_debug);
   localparam int NM=4,NS=4,IDW=4,TIDW=6;
   logic instr_valid,instr_ready;logic[31:0]instr,commit_instr,commit_next_pc;
   logic[31:0]paddr,pwdata,prdata;logic psel,penable,pwrite,pready,pslverr;
-  logic dma_sel,cfg_sel,irq_sel,maint_sel,mail_sel,host_sel;logic[31:0]dma_rdata,cfg_rdata,irq_rdata,maint_rdata,host_rdata;
-  logic dma_ready,dma_error,cfg_ready_apb,cfg_error,irq_ready,irq_error,maint_ready_apb,maint_error_apb,host_ready,host_error;
+  logic dma_sel,cfg_sel,irq_sel,maint_sel,tlb_sel,mail_sel,host_sel,chip_sel;logic[31:0]dma_rdata,cfg_rdata,irq_rdata,maint_rdata,tlb_rdata,host_rdata,chip_rdata;
+  logic dma_ready,dma_error,cfg_ready_apb,cfg_error,irq_ready,irq_error,maint_ready_apb,maint_error_apb,tlb_ready,tlb_error,host_ready,host_error;
   logic cfg_valid,cfg_ready,cfg_bank;logic[2:0]cfg_kind;logic[1:0]cfg_output;logic[5:0]cfg_index;logic[31:0]cfg_data;logic[1:0][7:0]bank_generation;
   logic svc_irq,busy;logic[2:0]submit_occupancy,completion_occupancy;logic[31:0]perf_tlb_hits,perf_tlb_misses,perf_walk_reads,perf_faults;
-  logic ptw_req_valid,ptw_req_ready,ptw_rsp_valid,ptw_rsp_ready,ptw_rsp_error;logic[31:0]ptw_req_addr,ptw_rsp_data;
+  logic ptw_req_valid,ptw_req_ready,ptw_rsp_valid,ptw_rsp_ready,ptw_rsp_error,translation_idle,tlb_inv_valid,tlb_inv_all;logic[7:0]tlb_inv_asid;logic[31:0]ptw_req_addr,ptw_rsp_data;
   logic mem_req_valid,mem_req_ready,mem_req_write,mem_rsp_valid,mem_rsp_ready,mem_rsp_error;logic[31:0]mem_req_addr,mem_req_wdata,mem_rsp_rdata;logic[3:0]mem_req_wstrb,mem_req_qos;
   logic[NM-1:0]s_awvalid,s_awready,s_wvalid,s_wready,s_bvalid,s_bready,s_arvalid,s_arready,s_rvalid,s_rready,s_wlast,s_rlast;
   logic[NM-1:0][IDW-1:0]s_awid,s_bid,s_arid,s_rid;logic[NM-1:0][31:0]s_awaddr,s_araddr;logic[NM-1:0][7:0]s_awlen,s_arlen,s_wstrb;logic[NM-1:0][2:0]s_awsize,s_arsize,s_awprot,s_arprot;logic[NM-1:0][1:0]s_awburst,s_arburst,s_bresp,s_rresp;logic[NM-1:0][3:0]s_awqos,s_arqos;logic[NM-1:0][63:0]s_wdata,s_rdata;
   logic[NS-1:0]m_awvalid,m_awready,m_wvalid,m_wready,m_bvalid,m_bready,m_arvalid,m_arready,m_rvalid,m_rready,m_wlast,m_rlast;
   logic[NS-1:0][TIDW-1:0]m_awid,m_bid,m_arid,m_rid;logic[NS-1:0][31:0]m_awaddr,m_araddr;logic[NS-1:0][7:0]m_awlen,m_arlen,m_wstrb;logic[NS-1:0][2:0]m_awsize,m_arsize,m_awprot,m_arprot;logic[NS-1:0][1:0]m_awburst,m_arburst,m_bresp,m_rresp;logic[NS-1:0][3:0]m_awqos,m_arqos;logic[NS-1:0][63:0]m_wdata,m_rdata;logic[NS-1:0]age_ar,age_aw;
   logic[2:0]irq_raw,irq_pending,irq_enable;
+  logic chip_ready,chip_irq,chip_busy,chip_done,chip_error;logic[15:0]chip_tag;logic[63:0]chip_plaintext,chip_ciphertext,chip_die_b_ciphertext;logic chip_crypto_error,chip_irq_monitor;
   logic cache_data_sel,uncached_ext_sel;logic[31:0]direct_rdata;logic direct_ready,direct_error;
   logic cache_req_valid,cache_req_ready,cache_req_write,cache_rsp_valid,cache_rsp_ready,cache_rsp_error;logic[31:0]cache_req_addr,cache_req_wdata,cache_rsp_rdata;logic[3:0]cache_req_wstrb;logic[2:0]cache_req_size;logic[7:0]cache_req_id,cache_rsp_id;
   logic maint_valid,maint_ready,maint_busy,maint_done,maint_error;logic[1:0]maint_cmd;logic[4:0]cache_state;logic cache_hit,cache_miss,cache_evict;logic[1:0]refill_beat,writeback_beat;
@@ -28,7 +31,9 @@ module rv32_protected_shared_top #(
   assign cfg_sel=psel&&paddr>=32'h4000_1000&&paddr<32'h4000_2000&&!mail_sel;
   assign irq_sel=psel&&paddr>=32'h4000_2000&&paddr<32'h4000_2100;
   assign maint_sel=psel&&paddr>=32'h4000_2100&&paddr<32'h4000_2200;
+  assign tlb_sel=psel&&paddr>=32'h4000_2200&&paddr<32'h4000_2300;
   assign host_sel=psel&&((paddr>=32'h1000_0000&&paddr<32'h3001_0000));
+  assign chip_sel=ENABLE_CHIPLET&&psel&&paddr>=32'h5000_0000&&paddr<32'h5000_0100;
   assign cache_data_sel=host_sel&&paddr<32'h2000_0000;
   assign uncached_ext_sel=host_sel&&!cache_data_sel;
   always_comb begin
@@ -37,17 +42,44 @@ module rv32_protected_shared_top #(
     else if(cfg_sel)begin prdata=cfg_rdata;pready=cfg_ready_apb;pslverr=cfg_error;end
     else if(irq_sel)begin prdata=irq_rdata;pready=irq_ready;pslverr=irq_error;end
     else if(maint_sel)begin prdata=maint_rdata;pready=maint_ready_apb;pslverr=maint_error_apb;end
+    else if(tlb_sel)begin prdata=tlb_rdata;pready=tlb_ready;pslverr=tlb_error;end
     else if(host_sel)begin prdata=host_rdata;pready=host_ready;pslverr=host_error;end
+    else if(chip_sel)begin prdata=chip_rdata;pready=chip_ready;pslverr=1'b0;end
     else if(mail_sel)begin prdata=firmware_result;pready=psel&&penable;pslverr=0;end
   end
 
-  rv32_core #(.MMIO_BASE(32'h4000_0000),.MMIO_END(32'h4000_2fff),.EXT_MEM_BASE(32'h1000_0000),.EXT_MEM_END(32'h3000_ffff),.DATA_MEM_WORDS(DATA_MEM_WORDS),.ENABLE_TRAPS(1),.EBREAK_TEST_HALT(0),.ENABLE_M(CPU_ENABLE_M)) cpu(
+  rv32_core #(.MMIO_BASE(32'h4000_0000),.MMIO_END(32'h5000_00ff),.EXT_MEM_BASE(32'h1000_0000),.EXT_MEM_END(32'h3000_ffff),.DATA_MEM_WORDS(DATA_MEM_WORDS),.ENABLE_TRAPS(1),.EBREAK_TEST_HALT(0),.ENABLE_M(CPU_ENABLE_M)) cpu(
     .clk,.rst_n,.instr_valid,.instr_ready,.instr,.irq_ext(irq),.irq_timer(1'b0),.paddr,.psel,.penable,.pwrite,.pwdata,.prdata,.pready,.pslverr,.commit_valid,.commit_instr,.commit_pc,.commit_next_pc,.halted(),.wb_valid(),.wb_rd(),.wb_data(),.mem_valid(),.mem_write(),.mem_addr(),.mem_wdata(),.mem_rdata(),.branch_taken(),.illegal_instr(),.bus_error(),.retire(),.rvfi_valid(),.rvfi_order(),.rvfi_insn(),.rvfi_trap(),.rvfi_intr(),.rvfi_pc_rdata(),.rvfi_pc_wdata(),.rvfi_rs1_addr(),.rvfi_rs2_addr(),.rvfi_rs1_rdata(),.rvfi_rs2_rdata(),.rvfi_rd_addr(),.rvfi_rd_wdata(),.rvfi_mem_addr(),.rvfi_mem_rmask(),.rvfi_mem_wmask(),.rvfi_mem_rdata(),.rvfi_mem_wdata(),.rvfi_mstatus(),.rvfi_mie(),.rvfi_mtvec(),.rvfi_mscratch(),.rvfi_mscratch_state(),.rvfi_mepc(),.rvfi_mcause(),.rvfi_mtval());
   rv32_rom_feeder #(.ROM_WORDS(ROM_WORDS),.DEFAULT_HEX("build/protected_offload/shared_firmware/firmware.hex")) rom(.clk,.rst_n,.instr_ready,.instr_valid,.instr,.commit_valid,.commit_next_pc,.halted(1'b0));
   protected_accel_apb_config cfg(.clk,.rst_n,.paddr(paddr[11:0]),.psel(cfg_sel),.penable,.pwrite,.pwdata,.prdata(cfg_rdata),.pready(cfg_ready_apb),.pslverr(cfg_error),.cfg_valid,.cfg_ready,.cfg_kind,.cfg_bank,.cfg_output,.cfg_index,.cfg_data,.bank_generation);
-  protected_offload_service svc(.clk,.rst_n,.apb_addr(paddr[11:0]),.apb_sel(dma_sel),.apb_enable(penable),.apb_write(pwrite),.apb_wdata(pwdata),.apb_rdata(dma_rdata),.apb_ready(dma_ready),.apb_error(dma_error),.root_pt_addr(32'h3000_0000),.tlb_inv_valid(1'b0),.tlb_inv_all(1'b0),.tlb_inv_asid('0),.ptw_req_valid,.ptw_req_ready,.ptw_req_addr,.ptw_rsp_valid,.ptw_rsp_ready,.ptw_rsp_data,.ptw_rsp_error,.mem_req_valid,.mem_req_ready,.mem_req_write,.mem_req_addr,.mem_req_wdata,.mem_req_wstrb,.mem_req_qos,.mem_rsp_valid,.mem_rsp_ready,.mem_rsp_rdata,.mem_rsp_error,.cfg_valid,.cfg_ready,.cfg_kind,.cfg_bank,.cfg_output,.cfg_index,.cfg_data,.bank_generation,.irq(svc_irq),.busy,.submit_occupancy,.completion_occupancy,.perf_tlb_hits,.perf_tlb_misses,.perf_walk_reads,.perf_faults,.last_translation_tlb_hit(),.accel_command_error(),.perf_accel_accepted(),.perf_accel_completed(),.perf_accel_input_chunks(),.perf_accel_output_stalls(),.perf_accel_bank_swaps());
-  protected_irq_aggregator irqs(.clk,.rst_n,.chiplet_dma_event(1'b0),.accelerator_event(svc_irq),.device_fault_event(1'b0),.paddr(paddr[5:0]),.psel(irq_sel),.penable,.pwrite,.pwdata,.prdata(irq_rdata),.pready(irq_ready),.pslverr(irq_error),.irq_ext(irq),.raw_status(irq_raw),.pending_status(irq_pending),.enable_mask(irq_enable));
+  protected_offload_service svc(.clk,.rst_n,.apb_addr(paddr[11:0]),.apb_sel(dma_sel),.apb_enable(penable),.apb_write(pwrite),.apb_wdata(pwdata),.apb_rdata(dma_rdata),.apb_ready(dma_ready),.apb_error(dma_error),.root_pt_addr(32'h3000_0000),.tlb_inv_valid,.tlb_inv_all,.tlb_inv_asid,.translation_idle,.ptw_req_valid,.ptw_req_ready,.ptw_req_addr,.ptw_rsp_valid,.ptw_rsp_ready,.ptw_rsp_data,.ptw_rsp_error,.mem_req_valid,.mem_req_ready,.mem_req_write,.mem_req_addr,.mem_req_wdata,.mem_req_wstrb,.mem_req_qos,.mem_rsp_valid,.mem_rsp_ready,.mem_rsp_rdata,.mem_rsp_error,.cfg_valid,.cfg_ready,.cfg_kind,.cfg_bank,.cfg_output,.cfg_index,.cfg_data,.bank_generation,.irq(svc_irq),.busy,.submit_occupancy,.completion_occupancy,.perf_tlb_hits,.perf_tlb_misses,.perf_walk_reads,.perf_faults,.last_translation_tlb_hit(),.accel_command_error(),.perf_accel_accepted(),.perf_accel_completed(),.perf_accel_input_chunks(),.perf_accel_output_stalls(),.perf_accel_bank_swaps());
+  protected_irq_aggregator irqs(.clk,.rst_n,.chiplet_dma_event(chip_irq),.accelerator_event(svc_irq),.device_fault_event(chip_error),.paddr(paddr[5:0]),.psel(irq_sel),.penable,.pwrite,.pwdata,.prdata(irq_rdata),.pready(irq_ready),.pslverr(irq_error),.irq_ext(irq),.raw_status(irq_raw),.pending_status(irq_pending),.enable_mask(irq_enable));
+  generate if(ENABLE_CHIPLET)begin:chiplet_service
+    // The lightweight RV32 APB master keeps PSEL asserted for the request
+    // cycle and consumes PREADY in the following edge.  The chiplet CSR
+    // interface is a request-valid interface rather than an APB slave, so
+    // use the decoded request phase here.  This produces one cfg_valid pulse
+    // per core MMIO instruction without relying on a zero-time APB access.
+    soc_chiplet_top chiplet(.clk,.rst_n,.power_state(2'b00),.dma_mode_force(1'b0),
+      .cfg_valid(chip_sel),.cfg_write(pwrite),.cfg_addr(paddr[7:0]),.cfg_wdata(pwdata),.cfg_rdata(chip_rdata),.cfg_ready(chip_ready),.irq_done(chip_irq),
+      .plaintext_monitor(chip_plaintext),.ciphertext_monitor(chip_ciphertext),.die_b_ciphertext_monitor(chip_die_b_ciphertext),.crypto_error_flag(chip_crypto_error),
+      .dma_busy_monitor(chip_busy),.dma_done_monitor(chip_done),.dma_error_monitor(chip_error),.irq_done_monitor(chip_irq_monitor),.dma_tag_monitor(chip_tag));
+    // Keep debug ports within the public chiplet monitor contract so the
+    // disabled configuration does not elaborate vendor implementation paths.
+    assign chip_active_debug=chip_busy;
+    assign chip_state_debug='0;
+    assign chip_submit_debug='0;
+    assign chip_comp_debug='0;
+    assign chip_send_debug='0;
+    assign chip_recv_debug='0;
+    assign chip_link_debug=chip_busy|chip_done|chip_irq_monitor;
+  end else begin:no_chiplet_service
+    assign chip_rdata=0;assign chip_ready=chip_sel&&penable;assign chip_irq=0;assign chip_busy=0;assign chip_done=0;assign chip_error=0;assign chip_tag=0;
+    assign chip_plaintext=0;assign chip_ciphertext=0;assign chip_die_b_ciphertext=0;assign chip_crypto_error=0;assign chip_irq_monitor=0;
+    assign chip_active_debug=0;assign chip_state_debug=0;assign chip_submit_debug=0;assign chip_comp_debug=0;assign chip_send_debug=0;assign chip_recv_debug=0;assign chip_link_debug=0;
+  end endgenerate
   protected_cache_maintenance_apb maint(.clk,.rst_n,.paddr(paddr[5:0]),.psel(maint_sel),.penable,.pwrite,.pwdata,.prdata(maint_rdata),.pready(maint_ready_apb),.pslverr(maint_error_apb),.maint_valid,.maint_ready,.maint_cmd,.maint_busy,.maint_done,.maint_error);
+  protected_tlb_control_apb tlbctl(.clk,.rst_n,.paddr(paddr[7:0]),.psel(tlb_sel),.penable,.pwrite,.pwdata,.prdata(tlb_rdata),.pready(tlb_ready),.pslverr(tlb_error),.translation_idle,.service_busy(busy),.inv_valid(tlb_inv_valid),.inv_all(tlb_inv_all),.inv_asid(tlb_inv_asid));
   always_ff @(posedge clk or negedge rst_n)begin if(!rst_n)begin firmware_done<=0;firmware_result<=0;cycles<=0;benchmark_cycles<=0;end else begin cycles<=cycles+1;if(mail_sel&&penable&&pwrite)begin if(paddr[4:0]==0)benchmark_cycles<=pwdata;else if(paddr[3:0]==0)firmware_result<=pwdata;else if(paddr[3:0]==4)firmware_done<=pwdata[0];end end end
 
   generate if(!USE_CACHE)begin:uncached_host

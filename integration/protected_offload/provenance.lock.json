@@ -1,13 +1,168 @@
 {
   "schema": 1,
   "sources": [
-    {"project": "AXI4-QoS-Fabric-DV", "commit": "25fd40691c9052b638f38746528da2d09ddb1e88", "file": "vendor/axi/axi4_qos_fabric.sv", "sha256": "522a6bd42de05416ee076b90c53b20bd606aaaaaadba070ccec74f3db5071bf7"},
-    {"project": "AXI4-QoS-Fabric-DV", "commit": "a5bbf0424aacbd9a124b2aa41fc385a318e22d16", "file": "vendor/axi/dma_iommu.sv", "sha256": "843301e9016589a96ddb7911eff12161145ce99fb6a709a772be720761a288e3"},
-    {"project": "AXI4-QoS-Fabric-DV", "commit": "25fd40691c9052b638f38746528da2d09ddb1e88", "file": "vendor/axi/qos_arbiter.sv", "sha256": "8cc6f45f9f194c1101bfc709413968cf6dbf241c0643c50da9bbd89723395396"},
-    {"project": "ucie_chiplet_soc", "commit": "c738486c15ba8f630265edd528a835ba43c897c8", "file": "vendor/rv32/rv32_core.sv", "sha256": "2989f68cf3bbc6b47691892870e45e9a46fdc8e75b0d1098f3cb1d335de7bd1a"},
-    {"project": "ucie_chiplet_soc", "commit": "c738486c15ba8f630265edd528a835ba43c897c8", "file": "vendor/rv32/rv32_muldiv.sv", "sha256": "5bb7ef78b1c9d3fd899ec990e90520400ba1aee6e32290e197d5d9c9c89ecaea"},
-    {"project": "ucie_chiplet_soc", "commit": "96ecbb1d572f001c1000beb6edf44b4cc6ebcec9", "file": "vendor/rv32/rv32_rom_feeder.sv", "sha256": "018528b019d2119b42742664608098915f1b50c4040f460f00a9199677a6a80a"},
-    {"project": "AXI4-L1-Cache-DV", "commit": "6f54c0fbd996b5878691e2cacf52d038b1af561e", "file": "vendor/cache/dcache_pkg.sv", "sha256": "e61df0e147a35f667ee9acd8a6bf7fea272ab28ec600d202d17b213390e7656e"},
-    {"project": "AXI4-L1-Cache-DV", "commit": "6f54c0fbd996b5878691e2cacf52d038b1af561e", "file": "vendor/cache/l1_dcache_top.sv", "sha256": "4424f4c740e3816cf16ee2b7d76200702c1440f9ea126adceb3628f354aaee9a"}
-  ]
+    {
+      "project": "AXI4-QoS-Fabric-DV",
+      "commit": "25fd40691c9052b638f38746528da2d09ddb1e88",
+      "file": "vendor/axi/axi4_qos_fabric.sv",
+      "sha256": "522a6bd42de05416ee076b90c53b20bd606aaaaaadba070ccec74f3db5071bf7"
+    },
+    {
+      "project": "AXI4-QoS-Fabric-DV",
+      "commit": "f9d6ba056d99b22573b90f9cc1b0ddb43e492f6b",
+      "file": "vendor/axi/dma_iommu.sv",
+      "sha256": "d2444584db07acad58dcf473d80e4b6d407fced66cd0f6f9a363473020bde021"
+    },
+    {
+      "project": "AXI4-QoS-Fabric-DV",
+      "commit": "25fd40691c9052b638f38746528da2d09ddb1e88",
+      "file": "vendor/axi/qos_arbiter.sv",
+      "sha256": "8cc6f45f9f194c1101bfc709413968cf6dbf241c0643c50da9bbd89723395396"
+    },
+    {
+      "project": "ucie_chiplet_soc",
+      "commit": "c738486c15ba8f630265edd528a835ba43c897c8",
+      "file": "vendor/rv32/rv32_core.sv",
+      "sha256": "2989f68cf3bbc6b47691892870e45e9a46fdc8e75b0d1098f3cb1d335de7bd1a"
+    },
+    {
+      "project": "ucie_chiplet_soc",
+      "commit": "c738486c15ba8f630265edd528a835ba43c897c8",
+      "file": "vendor/rv32/rv32_muldiv.sv",
+      "sha256": "5bb7ef78b1c9d3fd899ec990e90520400ba1aee6e32290e197d5d9c9c89ecaea"
+    },
+    {
+      "project": "ucie_chiplet_soc",
+      "commit": "96ecbb1d572f001c1000beb6edf44b4cc6ebcec9",
+      "file": "vendor/rv32/rv32_rom_feeder.sv",
+      "sha256": "018528b019d2119b42742664608098915f1b50c4040f460f00a9199677a6a80a"
+    },
+    {
+      "project": "AXI4-L1-Cache-DV",
+      "commit": "6f54c0fbd996b5878691e2cacf52d038b1af561e",
+      "file": "vendor/cache/dcache_pkg.sv",
+      "sha256": "e61df0e147a35f667ee9acd8a6bf7fea272ab28ec600d202d17b213390e7656e"
+    },
+    {
+      "project": "AXI4-L1-Cache-DV",
+      "commit": "6f54c0fbd996b5878691e2cacf52d038b1af561e",
+      "file": "vendor/cache/l1_dcache_top.sv",
+      "sha256": "4424f4c740e3816cf16ee2b7d76200702c1440f9ea126adceb3628f354aaee9a"
+    }
+  ],
+  "chiplet_snapshot": {
+    "project": "ucie_chiplet_soc",
+    "commit": "707283911654955a6205e6af27f3d0c4d52f6c67",
+    "source": "chiplet_extension/rtl",
+    "files": [
+      {
+        "file": "vendor/chiplet/bus/apb_dma_csr_bridge.sv",
+        "sha256": "bb864e0112e1c69daf165bd4d6bc6f35a285afe6d6554879d5221c10af9ab049"
+      },
+      {
+        "file": "vendor/chiplet/bus/axi_lite_csr_bridge.sv",
+        "sha256": "2e6929eb05605877eeeab3e33bd6e02e2c840d8d919f6201446b231f0846a710"
+      },
+      {
+        "file": "vendor/chiplet/cdc/async_fifo_gray.sv",
+        "sha256": "2c840724a057afc26332507eed080aec191b9b1dbfd2c60fed72f83d2a906bbf"
+      },
+      {
+        "file": "vendor/chiplet/cdc/cdc_pulse_sync.sv",
+        "sha256": "570b1feedec2566ed6aad4c2ad134fe7721769e19579d728a03601be376ff51a"
+      },
+      {
+        "file": "vendor/chiplet/cdc/cdc_sync_2ff.sv",
+        "sha256": "2f924e5a24bd17382a24b13a6b379582de2bcfd9cc340418239a2ec42c2b755c"
+      },
+      {
+        "file": "vendor/chiplet/channel_model/channel_model.sv",
+        "sha256": "0fd8d40c9bd87c074643d89df0234260c256bb965bf6abbebc10098647b3db93"
+      },
+      {
+        "file": "vendor/chiplet/d2d_adapter/credit_mgr.sv",
+        "sha256": "393f14a681c81edef64ff7a1c82c1ae43194fdf3d29ebcd49bdde924702092eb"
+      },
+      {
+        "file": "vendor/chiplet/d2d_adapter/flit_depacketizer.sv",
+        "sha256": "b79420d19f8e9aba98a05aafcfb3b988a539de900484b2ce9eec7eb9b8d38ac1"
+      },
+      {
+        "file": "vendor/chiplet/d2d_adapter/flit_packetizer.sv",
+        "sha256": "8c7457e29177ad5ca8e93ba1fa8390e6d8ac9f8334b4285348017e432a29bcfc"
+      },
+      {
+        "file": "vendor/chiplet/d2d_adapter/link_fsm.sv",
+        "sha256": "1eaa0fb7a30fac1b76f73d98d161428f47f47a9ab96a3062b46c88157b37df5e"
+      },
+      {
+        "file": "vendor/chiplet/d2d_adapter/retry_ctrl.sv",
+        "sha256": "0f85f8521fa8c732d513b2d80ce2f34a3aa1287ea845235fc83188aa5561c2d2"
+      },
+      {
+        "file": "vendor/chiplet/d2d_adapter/ucie_lane_if.sv",
+        "sha256": "4232045edcb9fe6aba9cbd0d52357467e27aa11065a461115d9dc54eaf853e5d"
+      },
+      {
+        "file": "vendor/chiplet/d2d_adapter/ucie_rx.sv",
+        "sha256": "473012e6df6c4da462dfb29fc70fa12f6783d75b707f0b7a8450312d873f22d3"
+      },
+      {
+        "file": "vendor/chiplet/d2d_adapter/ucie_tx.sv",
+        "sha256": "0af2c34ebc5d9f4e8c4919ae313ccabff51409fc7ace0bec907edb579be6a68c"
+      },
+      {
+        "file": "vendor/chiplet/die_a/die_a_system.sv",
+        "sha256": "85dc0fd90b8ae968923c4adc13a48bdc10c9337d45cf6dd941d9644e2e681ae9"
+      },
+      {
+        "file": "vendor/chiplet/die_a/dma_offload_ctrl.sv",
+        "sha256": "4927ffd64b5e8bc9decccfbbef6bcbe5bb270ede4e1031e5eac5cbc216f4d8c4"
+      },
+      {
+        "file": "vendor/chiplet/die_b/aes128_iterative.sv",
+        "sha256": "01a350f8b18e11ae9f9d6edaffb2c12ac4e5e86f87877c558d668f5affb82a1a"
+      },
+      {
+        "file": "vendor/chiplet/die_b/die_b_system.sv",
+        "sha256": "6f61089aaf0539c7c323a8b5e1dfbe3106a72083e51ec175d99ac98e182ee99d"
+      },
+      {
+        "file": "vendor/chiplet/firmware/apb_machine_timer.sv",
+        "sha256": "cede94c7d9e44a14ae8fea55316f43a11d6da8b8383ee0ca8da60d63dc4a3fd1"
+      },
+      {
+        "file": "vendor/chiplet/firmware/rv32_rom_feeder.sv",
+        "sha256": "018528b019d2119b42742664608098915f1b50c4040f460f00a9199677a6a80a"
+      },
+      {
+        "file": "vendor/chiplet/phy_model/phy_behavioral.sv",
+        "sha256": "036111cd04603e871ee96840327b8e7440169982c0023ac15547613149375632"
+      },
+      {
+        "file": "vendor/chiplet/power/chiplet_power_ctrl.sv",
+        "sha256": "0b9359fa1e8bee412702b73be20a4db93966385bcd23cd30fb4de9513bbe0f54"
+      },
+      {
+        "file": "vendor/chiplet/soc_chiplet_async_top.sv",
+        "sha256": "370b1785159da617caade4ee1ee189ae15670c76ca0f205ef06668918e44430b"
+      },
+      {
+        "file": "vendor/chiplet/soc_chiplet_rv32_top.sv",
+        "sha256": "5e826a60327aedd3be686ad4fafe6ccf28c3ac3bda58571112bc7340a811b3c6"
+      },
+      {
+        "file": "vendor/chiplet/soc_chiplet_top.sv",
+        "sha256": "b63d321a08621947354109aa81a48977b6fd4f264801c8d7cfb3321835b5e53e"
+      },
+      {
+        "file": "vendor/chiplet/soc_die_a_top.sv",
+        "sha256": "56bee5600a393daf5a7c9a1f31e79dccad15f1099fd592d80b5021c32a495650"
+      },
+      {
+        "file": "vendor/chiplet/soc_die_b_top.sv",
+        "sha256": "a2c738212f10327cfaf86b7b98d4dcb84c935eb8b043b2a49ec7f0035ad37cf5"
+      }
+    ]
+  }
 }

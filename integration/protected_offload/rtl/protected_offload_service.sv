@@ -60,6 +60,7 @@ module protected_offload_service #(
   output logic [31:0] perf_tlb_misses,
   output logic [31:0] perf_walk_reads,
   output logic [31:0] perf_faults,
+  output logic translation_idle,
   output logic last_translation_tlb_hit,
   output logic accel_command_error,
   output logic [31:0] perf_accel_accepted,
@@ -149,7 +150,7 @@ module protected_offload_service #(
     .rsp_ready(xlate_rsp_ready), .rsp_paddr(xlate_rsp_paddr),
     .rsp_fault(xlate_rsp_fault), .rsp_tlb_hit(tlb_hit),
     .inv_valid(tlb_inv_valid), .inv_all(tlb_inv_all),
-    .inv_asid(tlb_inv_asid), .ptw_req_valid, .ptw_req_ready,
+    .inv_asid(tlb_inv_asid), .idle(translation_idle), .ptw_req_valid, .ptw_req_ready,
     .ptw_req_addr, .ptw_rsp_valid, .ptw_rsp_ready, .ptw_rsp_data,
     .ptw_rsp_error, .perf_tlb_hits, .perf_tlb_misses,
     .perf_walk_reads, .perf_faults

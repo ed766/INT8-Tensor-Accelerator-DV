@@ -31,7 +31,8 @@ module dma_iommu #(
   output logic [31:0] perf_tlb_hits,
   output logic [31:0] perf_tlb_misses,
   output logic [31:0] perf_walk_reads,
-  output logic [31:0] perf_faults
+  output logic [31:0] perf_faults,
+  output logic idle
 );
   localparam logic [1:0] FAULT_NONE=2'd0,FAULT_INVALID=2'd1,FAULT_PERMISSION=2'd2,FAULT_ACCESS=2'd3;
   localparam int INDEX_W=$clog2(TLB_ENTRIES);
@@ -80,6 +81,7 @@ module dma_iommu #(
   end
 
   assign req_ready=state==IDLE && !inv_valid;
+  assign idle=state==IDLE;
   assign rsp_valid=state==RESPOND;
   assign rsp_paddr=response_paddr;
   assign rsp_fault=response_fault;

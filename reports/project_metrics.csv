@@ -30,11 +30,13 @@ protected_offload_model,205 / 205,Python orchestration plus compiled C++ event m
 protected_offload_coverage,77 / 77; 64 / 64,Functional points; same-execution crosses
 protected_offload_mutations,12 / 12,Expected controller defects detected
 protected_offload_formal,10 / 10,Bounded solver checks with reachable covers
-protected_offload_components,4 / 4,"Descriptor, queue, AXI adapter, and IOMMU checks"
+protected_offload_components,3 / 4,"Descriptor, queue, AXI adapter, and IOMMU checks"
 protected_offload_firmware,24 / 24,GCC-built RV32 APB/DMA execution matrix
 protected_shared_fabric,32 / 32,Firmware-owned host/DMA/PTW/QoS-fabric executions
 protected_shared_random,100 / 100,Seeded executable integration workloads
 protected_shared_compiler,36 / 36,RV32I/RV32IM crossed with O0/O2/Os
 protected_cache_ownership,8 / 8; 4 / 4,Positive handoffs; intended-negative detections
 protected_matched_performance,150 / 150,Five matched RV32I/RV32IM/accelerator paths
+protected_compute_host,2 / 2,One GCC RV32I core orchestrates chiplet DMA plus protected INT8
+protected_reset_epochs,4 / 4,Firmware reboot after deterministic reset injection
 protected_offload_code,raw 289 / 341 (84.75%),reviewed=289/289 (100.00%); exclusions=52; merged from 106 executable runs

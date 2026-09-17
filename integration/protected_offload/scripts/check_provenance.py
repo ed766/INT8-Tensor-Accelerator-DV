@@ -16,5 +16,15 @@ for source in lock["sources"]:
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     if digest != source["sha256"]:
         failures.append(f"hash:{source['file']}")
-print(f"PROTECTED_OFFLOAD_PROVENANCE|status={'PASS' if not failures else 'FAIL'}|files={len(lock['sources'])}|failures={','.join(failures) or 'none'}")
+snapshot = lock.get("chiplet_snapshot", {})
+for source in snapshot.get("files", []):
+    path = ROOT / source["file"]
+    if not path.is_file():
+        failures.append(f"missing:{source['file']}")
+        continue
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if digest != source["sha256"]:
+        failures.append(f"hash:{source['file']}")
+count = len(lock["sources"]) + len(snapshot.get("files", []))
+print(f"PROTECTED_OFFLOAD_PROVENANCE|status={'PASS' if not failures else 'FAIL'}|files={count}|failures={','.join(failures) or 'none'}")
 raise SystemExit(bool(failures))

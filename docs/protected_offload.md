@@ -26,6 +26,24 @@ CPU reuse. It passes `8 / 8` positive cases, while `4 / 4` intended-negative
 cases prove that omitted maintenance, a late dirty writeback, and CPU access
 during device ownership are detected.
 
+### Combined Host and Reset Evidence
+
+`make compute-host-check` runs two GCC-built firmware images on **one** RV32I
+core. The firmware initializes and verifies the protected INT8 DMA job through
+the four-master AXI fabric, then stages a four-word chiplet DMA job through the
+optional chiplet CSR window at `0x5000_0000`. The checked-in
+[`compute_host_summary.csv`](../reports/compute_host_summary.csv) records both
+passing executions; this is software orchestration of independent AES and INT8
+services, not an invented AES-to-INT8 data pipeline.
+
+`make protected-offload-error-reset` injects reset at four deterministic
+firmware phases. Each run restarts the ROM program, reinitializes
+firmware-owned page tables and buffers through the host bridge, and reaches the
+normal mailbox without accepting a pre-reset completion. The separately
+reported [`protected_error_reset_summary.csv`](../reports/protected_error_reset_summary.csv)
+is reset evidence only. It does not claim the larger page-walk, partial-output,
+or explicit context-update recovery matrix, which remains an open extension.
+
 This optional integration lane turns the tensor engine into a memory-to-memory
 device. Software snapshots a descriptor through APB, the four-entry DMA queue
 translates each input and output address, fetches a complete vector, streams it
@@ -121,6 +139,8 @@ make protected-offload-service-check
 make protected-offload-shared-matrix
 make protected-offload-shared-compiler
 make protected-offload-shared-random
+make protected-offload-error-reset
+make compute-host-check
 make protected-offload-cache-ownership
 make protected-offload-components
 make protected-offload-directed
