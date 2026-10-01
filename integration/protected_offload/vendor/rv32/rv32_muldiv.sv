@@ -24,6 +24,7 @@ module rv32_muldiv (
   logic        divide_special_q;
   logic [31:0] divide_special_result_q;
   logic [31:0] result_q;
+  logic mutation_started_q = 1'b0;
 
   wire is_division = op_q[2];
   assign req_ready = state_q == IDLE;
@@ -37,7 +38,7 @@ module rv32_muldiv (
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
 `ifdef RV32_BUG_M_STALE_RESET
-      state_q <= RESPONSE;
+      state_q <= mutation_started_q ? RESPONSE : IDLE;
 `else
       state_q <= IDLE;
 `endif
@@ -62,6 +63,7 @@ module rv32_muldiv (
         IDLE: if (req_valid) begin
           logic lhs_signed, rhs_signed;
           logic [31:0] lhs_mag, rhs_mag;
+          mutation_started_q <= 1'b1;
           lhs_signed = (req_op == 3'd1) || (req_op == 3'd2) ||
                        (req_op == 3'd4) || (req_op == 3'd6);
           rhs_signed = (req_op == 3'd1) || (req_op == 3'd4) || (req_op == 3'd6)
@@ -159,8 +161,13 @@ module rv32_muldiv (
   end
 
 `ifdef FORMAL
+  logic formal_past_valid;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) formal_past_valid <= 1'b0;
+    else formal_past_valid <= 1'b1;
+  end
   always_ff @(posedge clk) if (rst_n) begin
-    if ($past(rsp_valid && !rsp_ready)) begin
+    if (formal_past_valid && $past(rsp_valid && !rsp_ready)) begin
       a_result_stable: assert (rsp_valid && $stable(rsp_result));
     end
     if (req_valid && !req_ready) begin

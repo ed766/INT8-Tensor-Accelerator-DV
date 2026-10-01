@@ -29,8 +29,8 @@ protected_offload_random,100 / 100,Deterministic descriptor/protection/fault wor
 protected_offload_model,205 / 205,Python orchestration plus compiled C++ event model
 protected_offload_coverage,77 / 77; 64 / 64,Functional points; same-execution crosses
 protected_offload_mutations,12 / 12,Expected controller defects detected
-protected_offload_formal,10 / 10,Bounded solver checks with reachable covers
-protected_offload_components,3 / 4,"Descriptor, queue, AXI adapter, and IOMMU checks"
+protected_offload_formal,16 / 16,Bounded solver checks with reachable covers
+protected_offload_components,7 / 7,"Descriptor, queue, AXI adapter, IOMMU, and machine-timer checks"
 protected_offload_firmware,24 / 24,GCC-built RV32 APB/DMA execution matrix
 protected_shared_fabric,32 / 32,Firmware-owned host/DMA/PTW/QoS-fabric executions
 protected_shared_random,100 / 100,Seeded executable integration workloads
@@ -38,6 +38,18 @@ protected_shared_compiler,36 / 36,RV32I/RV32IM crossed with O0/O2/Os
 protected_cache_ownership,8 / 8; 4 / 4,Positive handoffs; intended-negative detections
 protected_matched_performance,150 / 150,Five matched RV32I/RV32IM/accelerator paths
 protected_compute_host,2 / 2,One GCC RV32I core orchestrates chiplet DMA plus protected INT8
-protected_reset_epochs,4 / 4,Firmware reboot after deterministic reset injection
+protected_reset_epochs,6 / 6,Firmware reboot after deterministic reset injection
 protected_page_faults,4 / 4,"PTE fault, permission denial, and partial-output remap/retry"
+compute_crossover_directed,48 / 48,Historical parameterized RTL configurations; not 48 distinct scenario programs
+compute_crossover_model,48 / 48,Fresh schema-3 replay of 48 directed configurations; not distinct scenario-program closure
+compute_crossover_random_model,100 / 100,"Strict schema-3 replay of 100 seeded workloads with local ISS, translation, and byte-memory checking"
+compute_crossover_schema3_smoke,1 / 1,"Unique integration smoke with RV32 ISS, IOMMU/PTE replay, host/DMA byte-memory checks and build identity"
+compute_crossover_schema3_cache_smoke,1 / 1,Cache-enabled schema-3 replay exercises multibeat host refills/writebacks against byte memory
+compute_crossover_checker_selftest,29 negative + 7 controls,Adversarial trace qualification covers reset/APB lifecycle and legal multibeat reads/writes; bound to checker and self-test hashes
+compute_crossover_legacy_reachability,34 / 34,Historical family/event reachability; not crossover closure
+compute_crossover_required_predicates,15 / 15,Manifest-defined event-correlated predicates; separate from transaction-cross closure
+compute_crossover_event_crosses,53 / 53,Versioned event-correlated observed-bin manifest; all witnesses validated against trace hashes and event IDs
+compute_crossover_rtl_mutations,12 / 12,"Named crossover mutation matrix; compile, activation, and intended checker bucket required"
+compute_crossover_formal,16 / 16,16 solver-reachable; other evidence types reported separately
+compute_crossover_raw_code_coverage,744 / 890 native lines (83.60%); branch 717 / 926 (77.43%); expression 78.34%; toggle 47.38%,"Integrated-top native Verilator point types reported separately; 48 directed + 100 firmware/DMA + 100 CPU-stream + 8 cache-ownership databases; targets are 95% line and 90% branch, currently unmet; no exclusions"
 protected_offload_code,raw 289 / 341 (84.75%),reviewed=289/289 (100.00%); exclusions=52; merged from 106 executable runs

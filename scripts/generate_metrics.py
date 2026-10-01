@@ -4,10 +4,13 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import re
 import statistics
 from pathlib import Path
+
+csv.field_size_limit(20_000_000)
 
 ROOT = Path(__file__).resolve().parents[1]
 START = "<!-- BEGIN GENERATED METRICS -->"
@@ -68,6 +71,17 @@ def main() -> int:
     protected_compute_host = rows("reports/compute_host_summary.csv") if (ROOT / "reports/compute_host_summary.csv").exists() else []
     protected_error_reset = rows("reports/protected_error_reset_summary.csv") if (ROOT / "reports/protected_error_reset_summary.csv").exists() else []
     protected_error = rows("reports/protected_error_summary.csv") if (ROOT / "reports/protected_error_summary.csv").exists() else []
+    compute_crossover = rows("reports/compute_crossover_directed.csv") if (ROOT / "reports/compute_crossover_directed.csv").exists() else []
+    compute_crossover_model = rows("reports/compute_crossover_model.csv") if (ROOT / "reports/compute_crossover_model.csv").exists() else []
+    compute_crossover_random_model = rows("reports/compute_crossover_random_model.csv") if (ROOT / "reports/compute_crossover_random_model.csv").exists() else []
+    compute_crossover_smoke = rows("reports/compute_crossover_schema3_smoke_model.csv") if (ROOT / "reports/compute_crossover_schema3_smoke_model.csv").exists() else []
+    compute_crossover_cache_smoke = rows("reports/compute_crossover_schema3_cache_smoke_model.csv") if (ROOT / "reports/compute_crossover_schema3_cache_smoke_model.csv").exists() else []
+    compute_crossover_selftest = rows("reports/compute_crossover_checker_selftest.csv") if (ROOT / "reports/compute_crossover_checker_selftest.csv").exists() else []
+    compute_crossover_coverage = rows("reports/compute_crossover_coverage.csv") if (ROOT / "reports/compute_crossover_coverage.csv").exists() else []
+    compute_crossover_crosses = rows("reports/compute_crossover_cross_coverage.csv") if (ROOT / "reports/compute_crossover_cross_coverage.csv").exists() else []
+    compute_crossover_mutations = rows("reports/protected_offload_integration_mutations.csv") if (ROOT / "reports/protected_offload_integration_mutations.csv").exists() else []
+    compute_crossover_formal = rows("reports/protected_offload_formal.csv") if (ROOT / "reports/protected_offload_formal.csv").exists() else []
+    compute_crossover_code = rows("reports/compute_crossover_code_coverage.csv") if (ROOT / "reports/compute_crossover_code_coverage.csv").exists() else []
     branch_value = (
         f"{code['branch_hit']} / {code['branch_total']} ({code['branch_percent']}%)"
         if code["branch_percent"] != "NA" else "NA (Verilator 5.020 LCOV)"
@@ -113,7 +127,7 @@ def main() -> int:
             ("protected_offload_coverage", f"{sum(r['status'] == 'COVERED' for r in protected_feature)} / {len(protected_feature)}; {sum(r['status'] == 'COVERED' for r in protected_cross)} / {len(protected_cross)}", "Functional points; same-execution crosses"),
             ("protected_offload_mutations", f"{sum(r['status'] == 'DETECTED' for r in protected_mutations)} / {len(protected_mutations)}", "Expected controller defects detected"),
             ("protected_offload_formal", f"{sum(r['status'] == 'PASS' for r in protected_formal)} / {len(protected_formal)}", "Bounded solver checks with reachable covers"),
-            ("protected_offload_components", f"{sum(r['status'] == 'PASS' for r in protected_components)} / {len(protected_components)}", "Descriptor, queue, AXI adapter, and IOMMU checks"),
+            ("protected_offload_components", f"{sum(r['status'] == 'PASS' for r in protected_components)} / {len(protected_components)}", "Descriptor, queue, AXI adapter, IOMMU, and machine-timer checks"),
             ("protected_offload_firmware", f"{sum(r.get('execution_status') == 'PASS' for r in protected_firmware)} / {len(protected_firmware)}", "GCC-built RV32 APB/DMA execution matrix"),
             ("protected_shared_fabric", f"{sum(r['status'] == 'PASS' for r in protected_shared)} / {len(protected_shared)}", "Firmware-owned host/DMA/PTW/QoS-fabric executions"),
             ("protected_shared_random", f"{sum(r['status'] == 'PASS' for r in protected_shared_random)} / {len(protected_shared_random)}", "Seeded executable integration workloads"),
@@ -124,6 +138,61 @@ def main() -> int:
             ("protected_reset_epochs", f"{sum(r['status'] == 'PASS' for r in protected_error_reset)} / {len(protected_error_reset)}", "Firmware reboot after deterministic reset injection"),
             ("protected_page_faults", f"{sum(r['status'] == 'PASS' for r in protected_error)} / {len(protected_error)}", "PTE fault, permission denial, and partial-output remap/retry"),
         ])
+        if compute_crossover:
+            crossover_legacy = [row for row in compute_crossover_coverage if row.get("point_type") in ("family", "event")]
+            crossover_required = [row for row in compute_crossover_coverage if row.get("point_type") == "required_predicate"]
+            current_checker_sha = hashlib.sha256((ROOT / "integration/protected_offload/scripts/check_crossover_trace.py").read_bytes()).hexdigest()
+            current_manifest_sha = hashlib.sha256((ROOT / "integration/protected_offload/coverage/compute_crossover_manifest.json").read_bytes()).hexdigest()
+            current_generator_sha = hashlib.sha256((ROOT / "integration/protected_offload/scripts/generate_compute_crossover_coverage.py").read_bytes()).hexdigest()
+            current_directed_sha = hashlib.sha256((ROOT / "reports/compute_crossover_directed.csv").read_bytes()).hexdigest()
+            model_current = bool(compute_crossover_model) and all(
+                row.get("status") == "PASS" and row.get("checker_sha256") == current_checker_sha
+                and row.get("observer_build_id")
+                for row in compute_crossover_model
+            )
+            random_model_current = bool(compute_crossover_random_model) and all(
+                row.get("status") == "PASS" and row.get("checker_sha256") == current_checker_sha
+                and row.get("observer_build_id")
+                for row in compute_crossover_random_model
+            )
+            smoke_current = bool(compute_crossover_smoke) and all(
+                row.get("status") == "PASS" and row.get("checker_sha256") == current_checker_sha
+                and row.get("observer_build_id")
+                for row in compute_crossover_smoke
+            )
+            cache_smoke_current = bool(compute_crossover_cache_smoke) and all(
+                row.get("status") == "PASS" and row.get("checker_sha256") == current_checker_sha
+                and row.get("observer_build_id") and row.get("cache") == "1"
+                for row in compute_crossover_cache_smoke
+            )
+            selftest_path = ROOT / "integration/protected_offload/scripts/check_crossover_trace_selftest.py"
+            selftest_sha = hashlib.sha256(selftest_path.read_bytes()).hexdigest()
+            selftest_current = len(compute_crossover_selftest) == 36 and all(
+                row.get("status") == "PASS" and row.get("checker_sha256") == current_checker_sha
+                and row.get("selftest_sha256") == selftest_sha for row in compute_crossover_selftest
+            )
+            coverage_current = bool(compute_crossover_coverage) and all(
+                row.get("manifest_sha256") == current_manifest_sha
+                and row.get("directed_report_sha256") == current_directed_sha
+                and row.get("generator_sha256") == current_generator_sha
+                for row in compute_crossover_coverage
+            )
+            metrics.extend([
+                ("compute_crossover_directed", f"{sum(r['status'] == 'PASS' for r in compute_crossover)} / {len(compute_crossover)}", "Historical parameterized RTL configurations; not 48 distinct scenario programs"),
+                ("compute_crossover_model", f"{sum(r['status'] == 'PASS' for r in compute_crossover_model)} / {len(compute_crossover_model)}" if model_current else f"STALE ({len(compute_crossover_model)} canonical historical rows; regenerate under schema 3)", "Fresh schema-3 replay of 48 directed configurations; not distinct scenario-program closure"),
+                ("compute_crossover_random_model", f"{sum(r['status'] == 'PASS' for r in compute_crossover_random_model)} / {len(compute_crossover_random_model)}" if random_model_current else f"STALE / NOT_RUN ({len(compute_crossover_random_model)} rows)", "Strict schema-3 replay of 100 seeded workloads with local ISS, translation, and byte-memory checking"),
+                ("compute_crossover_schema3_smoke", f"{sum(r['status'] == 'PASS' for r in compute_crossover_smoke)} / {len(compute_crossover_smoke)}" if smoke_current else "STALE / NOT_RUN", "Unique integration smoke with RV32 ISS, IOMMU/PTE replay, host/DMA byte-memory checks and build identity"),
+                ("compute_crossover_schema3_cache_smoke", f"{sum(r['status'] == 'PASS' for r in compute_crossover_cache_smoke)} / {len(compute_crossover_cache_smoke)}" if cache_smoke_current else "STALE / NOT_RUN", "Cache-enabled schema-3 replay exercises multibeat host refills/writebacks against byte memory"),
+                ("compute_crossover_checker_selftest", f"{sum(row.get('expected') == 'FAIL' for row in compute_crossover_selftest)} negative + {sum(row.get('expected') == 'PASS' for row in compute_crossover_selftest)} controls" if selftest_current else "STALE / NOT_RUN", "Adversarial trace qualification covers reset/APB lifecycle and legal multibeat reads/writes; bound to checker and self-test hashes"),
+                ("compute_crossover_legacy_reachability", f"{sum(r['status'] == 'PASS' for r in crossover_legacy)} / {len(crossover_legacy)}" if coverage_current else "STALE / NOT_REGENERATED", "Historical family/event reachability; not crossover closure"),
+                ("compute_crossover_required_predicates", f"{sum(r['status'] == 'PASS' for r in crossover_required)} / {len(crossover_required)}" if coverage_current else "STALE / NOT_REGENERATED", "Manifest-defined event-correlated predicates; separate from transaction-cross closure"),
+                ("compute_crossover_event_crosses", f"{sum(r.get('point_type') == 'cross_bin' and r.get('status') == 'PASS' for r in compute_crossover_crosses)} / {sum(r.get('point_type') == 'cross_bin' for r in compute_crossover_crosses)}", "Versioned event-correlated observed-bin manifest; all witnesses validated against trace hashes and event IDs"),
+                ("compute_crossover_rtl_mutations", f"{sum(r.get('status') == 'DETECTED' for r in compute_crossover_mutations)} / {len(compute_crossover_mutations)}", "Named crossover mutation matrix; compile, activation, and intended checker bucket required"),
+                ("compute_crossover_formal", f"{sum(r.get('status') == 'PASS' for r in compute_crossover_formal)} / {len(compute_crossover_formal)}", f"{sum(r.get('cover') == 'REACHABLE' for r in compute_crossover_formal)} solver-reachable; other evidence types reported separately"),
+            ])
+            integrated = next((r for r in compute_crossover_code if r.get("scope") == "integrated_protected_offload_and_rv32"), {})
+            if integrated:
+                metrics.append(("compute_crossover_raw_code_coverage", f"{integrated.get('line_hit')} / {integrated.get('line_total')} native lines ({integrated.get('line_percent')}%); branch {integrated.get('branch_hit')} / {integrated.get('branch_total')} ({integrated.get('branch_percent')}%); expression {integrated.get('expr_percent')}%; toggle {integrated.get('toggle_percent')}%", "Integrated-top native Verilator point types reported separately; 48 directed + 100 firmware/DMA + 100 CPU-stream + 8 cache-ownership databases; targets are 95% line and 90% branch, currently unmet; no exclusions"))
         if protected_code:
             metrics.append(("protected_offload_code", f"raw {protected_code['line_hit']} / {protected_code['line_total']} ({protected_code['line_percent']}%)", protected_code["note"]))
     with (ROOT / "reports" / "project_metrics.csv").open("w", newline="") as handle:
@@ -161,11 +230,11 @@ def main() -> int:
         "protected_offload_random": "Protected-offload seeded RTL",
         "protected_offload_model": "Protected-offload trace replay",
         "protected_offload_coverage": "Protected-offload coverage / crosses",
-        "protected_offload_mutations": "Protected-offload RTL mutations",
+        "protected_offload_mutations": "Existing protected-offload mutations",
         "protected_offload_formal": "Protected-offload bounded properties",
         "protected_offload_components": "Protected-offload component checks",
         "protected_offload_firmware": "Protected-offload GCC/RV32 execution",
-        "protected_offload_code": "Protected-offload line coverage",
+        "protected_offload_code": "Standalone protected-offload line coverage",
         "protected_shared_fabric": "Firmware-owned fabric execution",
         "protected_shared_random": "Firmware-owned seeded integration",
         "protected_shared_compiler": "RV32I/RV32IM compiler matrix",
@@ -174,6 +243,18 @@ def main() -> int:
         "protected_compute_host": "Single-core chiplet + INT8 orchestration",
         "protected_reset_epochs": "Firmware reset epochs",
         "protected_page_faults": "Firmware page-table recovery",
+        "compute_crossover_directed": "RV32M compute-crossover directed RTL",
+        "compute_crossover_model": "Compute-crossover transaction replay",
+        "compute_crossover_random_model": "Seeded crossover model replay",
+        "compute_crossover_schema3_smoke": "Schema-3 crossover smoke replay",
+        "compute_crossover_schema3_cache_smoke": "Cache-enabled schema-3 crossover replay",
+        "compute_crossover_checker_selftest": "Crossover checker qualification",
+        "compute_crossover_legacy_reachability": "Legacy crossover reachability",
+        "compute_crossover_required_predicates": "Required crossover predicates",
+        "compute_crossover_event_crosses": "Crossover event-correlated crosses",
+        "compute_crossover_rtl_mutations": "Crossover RTL mutations detected",
+        "compute_crossover_formal": "Crossover formal/property groups",
+        "compute_crossover_raw_code_coverage": "Crossover raw integrated-top code coverage",
     }
     table.extend(f"| {labels[key]} | `{value}` |" for key, value, _ in metrics)
     table.append(END)

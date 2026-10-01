@@ -17,6 +17,7 @@ module tb_protected_dma_axi_adapter;
       @(negedge clk);req_valid=1;req_write=wr;req_addr=addr;req_wdata=data;req_wstrb=strb;req_qos=4'ha;
       do @(posedge clk); while(!req_ready);@(negedge clk);req_valid=0;
       if(wr) begin
+        if(awaddr!==addr||awsize!==3'd2)failures++;
         repeat(2)@(posedge clk);awready=1;@(posedge clk);awready=0;
         repeat(2)@(posedge clk);wready=1;@(posedge clk);wready=0;
         if(addr[2]) begin if(wdata!=={data,32'd0}||wstrb!=={strb,4'd0})failures++;end
@@ -24,6 +25,7 @@ module tb_protected_dma_axi_adapter;
         @(negedge clk);bvalid=1;bid=4'h1;bresp=expect_error?2'b10:2'b00;
         @(posedge clk);@(negedge clk);bvalid=0;
       end else begin
+        if(araddr!==addr||arlsize!==3'd2)failures++;
         repeat(2)@(posedge clk);arready=1;@(posedge clk);arready=0;
         @(negedge clk);rvalid=1;rid=4'h1;rresp=expect_error?2'b10:2'b00;rlast=1;
         rdata={32'h89abcdef,32'h01234567};@(posedge clk);@(negedge clk);rvalid=0;

@@ -9,9 +9,10 @@
     },
     {
       "project": "AXI4-QoS-Fabric-DV",
-      "commit": "f9d6ba056d99b22573b90f9cc1b0ddb43e492f6b",
+      "commit": "ee45f7f1c2471a6f297b4f0c4de68df0518a3c4c",
       "file": "vendor/axi/dma_iommu.sv",
-      "sha256": "d2444584db07acad58dcf473d80e4b6d407fced66cd0f6f9a363473020bde021"
+      "sha256": "8981fddbe10091a678f7a0e960d6dcf6f79c0082dcdd5ba8a86b3d1542729188",
+      "source_state": "byte-identical authoritative rtl/dma_iommu.sv at the recorded immutable commit including real invalidation mutation hook"
     },
     {
       "project": "AXI4-QoS-Fabric-DV",
@@ -21,15 +22,17 @@
     },
     {
       "project": "ucie_chiplet_soc",
-      "commit": "c738486c15ba8f630265edd528a835ba43c897c8",
+      "commit": "4d1f1639947822e0260ecdab50d3b9bca969d01f",
       "file": "vendor/rv32/rv32_core.sv",
-      "sha256": "2989f68cf3bbc6b47691892870e45e9a46fdc8e75b0d1098f3cb1d335de7bd1a"
+      "sha256": "1821d760dba4c585d31fc2986edfa0526b72c5e1db2b2fef8c1d59ef4a9e8533",
+      "source_state": "recorded authoritative commit plus local compile-time RV32_BUG_APB_SETUP_RETIRE and RV32_BUG_IRQ_BEFORE_M_RETIRE mutation hooks; nominal instruction behavior unchanged"
     },
     {
       "project": "ucie_chiplet_soc",
-      "commit": "c738486c15ba8f630265edd528a835ba43c897c8",
+      "commit": "4d1f1639947822e0260ecdab50d3b9bca969d01f",
       "file": "vendor/rv32/rv32_muldiv.sv",
-      "sha256": "5bb7ef78b1c9d3fd899ec990e90520400ba1aee6e32290e197d5d9c9c89ecaea"
+      "sha256": "fe4028ccd0e0222a3bddd7bb68670e1c796bdabc47efa51a7942e9ba322ca644",
+      "source_state": "recorded authoritative commit with checksum-verified compile-time verification mutation hooks"
     },
     {
       "project": "ucie_chiplet_soc",
@@ -52,7 +55,7 @@
   ],
   "chiplet_snapshot": {
     "project": "ucie_chiplet_soc",
-    "commit": "707283911654955a6205e6af27f3d0c4d52f6c67",
+    "commit": "4d1f1639947822e0260ecdab50d3b9bca969d01f",
     "source": "chiplet_extension/rtl",
     "files": [
       {
@@ -153,15 +156,15 @@
       },
       {
         "file": "vendor/chiplet/soc_chiplet_top.sv",
-        "sha256": "b63d321a08621947354109aa81a48977b6fd4f264801c8d7cfb3321835b5e53e"
+        "sha256": "a601080d4ad5588adf2f30355d1dac9dbbbba2d27f7ca61f96de8a004a6c4d4f"
       },
       {
         "file": "vendor/chiplet/soc_die_a_top.sv",
-        "sha256": "56bee5600a393daf5a7c9a1f31e79dccad15f1099fd592d80b5021c32a495650"
+        "sha256": "7f7b95bedc4c9ab2d86f45986706eb97434b9f495a1fbde84ac54a5420a9eec2"
       },
       {
         "file": "vendor/chiplet/soc_die_b_top.sv",
-        "sha256": "a2c738212f10327cfaf86b7b98d4dcb84c935eb8b043b2a49ec7f0035ad37cf5"
+        "sha256": "2b72f23e1e3379eaf1344cee06373511313ba21765f9785142622a210e92fa5e"
       }
     ]
   }

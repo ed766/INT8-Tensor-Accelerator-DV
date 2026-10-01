@@ -1,0 +1,7 @@
+scenario,status,reset_phase,phase_reached,pending_at_reset,epochs,canceled_transactions,trace,failure
+reset_shared_on_ptw_req,PASS,ptw_req,true,"xlate=1,mem=0,completion=0",2,2,build/protected_offload/shared_firmware/reset_shared_on_ptw_req/crossover.trace,none
+reset_shared_on_mem_req,PASS,mem_req,true,"xlate=0,mem=1,completion=0",2,2,build/protected_offload/shared_firmware/reset_shared_on_mem_req/crossover.trace,none
+reset_shared_on_mem_rsp,PASS,mem_rsp,true,"xlate=0,mem=1,completion=0",2,2,build/protected_offload/shared_firmware/reset_shared_on_mem_rsp/crossover.trace,none
+reset_shared_on_apb_wait,PASS,apb_wait,true,"xlate=0,mem=0,completion=0",2,0,build/protected_offload/shared_firmware/reset_shared_on_apb_wait/crossover.trace,none
+reset_shared_on_completion,PASS,completion,true,"xlate=0,mem=0,completion=1",2,1,build/protected_offload/shared_firmware/reset_shared_on_completion/crossover.trace,none
+reset_shared_on_host_w_wait,PASS,host_w_wait,true,"xlate=0,mem=0,completion=0",2,0,build/protected_offload/shared_firmware/reset_shared_on_host_w_wait/crossover.trace,none

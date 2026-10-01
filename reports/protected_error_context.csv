@@ -1,0 +1,5 @@
+scenario,status,completion_statuses,vectors_done,translation_faults,write_errors,committed_writes,pre_retry_snapshot,trace,failure
+input_pte_fault,PASS,2,0,1,0,0,NA,build/protected_offload/shared_firmware/input_pte_fault/crossover.trace,none
+output_pte_fault,PASS,3,0,1,0,0,NA,build/protected_offload/shared_firmware/output_pte_fault/crossover.trace,none
+output_permission_fault,PASS,3,0,1,0,0,NA,build/protected_offload/shared_firmware/output_permission_fault/crossover.trace,none
+partial_output_repair_retry,PASS,5;0,1;2,0,1,3,0000000010101010,build/protected_offload/shared_firmware/partial_output_repair_retry/crossover.trace,none

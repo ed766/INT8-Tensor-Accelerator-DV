@@ -24,6 +24,7 @@ module protected_axi_adapter_formal;
 
   logic past_valid=0;
   logic [3:0] accepted=0,responded=0;
+  logic [31:0] address=0;
   logic write_active=0,read_active=0,aw_seen=0,w_seen=0,ar_seen=0;
   always @(posedge clk) begin
     past_valid<=1;
@@ -31,6 +32,7 @@ module protected_axi_adapter_formal;
       accepted<=0;responded<=0;write_active<=0;read_active<=0;aw_seen<=0;w_seen<=0;ar_seen<=0;
     end else begin
       if(req_valid&&req_ready) begin
+        address<={req_addr[31:2],2'b00};
         accepted<=accepted+1'b1;
         write_active<=req_write;read_active<=!req_write;aw_seen<=0;w_seen<=0;ar_seen<=0;
       end
@@ -45,12 +47,12 @@ module protected_axi_adapter_formal;
         if($past(req_valid&&!req_ready)) assume(req_valid&&$stable({req_write,req_addr,req_wdata,req_wstrb,req_qos}));
         assert(responded<=accepted);
         assert((accepted-responded)<=1);
-        if(awvalid) begin assert(write_active);assert(awaddr[2:0]==0);assert(awlen==0);assert(awsize==2);end
+        if(awvalid) begin assert(write_active);assert(awaddr[1:0]==0);assert(awaddr==address);assert(awlen==0);assert(awsize==2);end
         if(wvalid) begin
           assert(write_active);assert(wlast);
           assert((wdata[31:0]==0&&wstrb[3:0]==0)||(wdata[63:32]==0&&wstrb[7:4]==0));
         end
-        if(arvalid) begin assert(read_active);assert(araddr[2:0]==0);assert(arlen==0);assert(arsize==2);end
+        if(arvalid) begin assert(read_active);assert(araddr[1:0]==0);assert(araddr==address);assert(arlen==0);assert(arsize==2);end
         if(rsp_valid&&write_active) assert((aw_seen||$past(awvalid&&awready))&&(w_seen||$past(wvalid&&wready)));
         if(rsp_valid&&read_active) assert(ar_seen||$past(arvalid&&arready));
         if($past(rsp_valid&&!rsp_ready)) assert(rsp_valid&&$stable({rsp_rdata,rsp_error}));

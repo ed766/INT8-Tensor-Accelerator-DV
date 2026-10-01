@@ -1,0 +1,12 @@
+finding,status,correction,evidence,remaining
+1,PASS,Protect every changed generation byte against its bank reference,protected_accel_apb_config.sv; tb_protected_endpoints.sv; clean strict protocol gate,none
+2,PASS,Connect descriptor and translation through numerical inputs outputs committed memory and exact completion counts,check_crossover_trace.py; compute_crossover_checker_selftest.csv; compute_crossover_model.csv,none
+3,PASS,Require original scenario-specific activation and results rather than aliases,compute_crossover_manifest.json; check_crossover_scenario_intents.py; compute_crossover_directed.csv,none
+4,PASS,Measure overlap only within actual DMA execution interval,DMA_ACTIVE_START/DMA_ACTIVE_END; generate_crossover_cross_coverage.py; compute_crossover_cross_coverage.csv,none
+5,PASS,Require exact manifest completeness including all fifteen predicates,generate_compute_crossover_coverage.py; check_crossover_release.py; compute_crossover_coverage.csv,none
+6,PASS,Use explicit hexadecimal parsing and descriptor-correlated translated physical ranges,ownership_ranges.py; test_ownership_ranges.py; compute_crossover_cross_coverage.csv,none
+7,PASS,Require actual source generator and instance provenance with independently implemented C drivers,compute_crossover_independent.csv; compute_crossover_independent_model.csv; compute_crossover_cross_coverage.csv,none
+8,PASS,Mutate actual IOMMU invalidation after warming and remapping a translation,run_crossover_mutations.py; vendor/axi/dma_iommu.sv; protected_offload_integration_mutations.csv,none
+9,PASS,Save and restore callee-saved registers and require realized operand shift and branch activity,gen_crossover_cpu_stream.py; rv32m_instruction_stream_random.csv; rv32m_instruction_stream_random_model.csv,none
+10,PASS,Reject unsolicited duplicate corrupt or wrong-epoch AES output and verify destination memory,check_compute_host_evidence.py; test_compute_host_evidence.py; compute_host_evidence.csv,none
+11,PARTIAL,Actual formal mode depth and reachable covers plus full isolated strict execution,protected_offload_formal.csv; compute_crossover_clean_checkout.csv; .github/workflows/verification.yml,Tested chiplet prerequisites published and CI pin updated; remote execution remains unverified

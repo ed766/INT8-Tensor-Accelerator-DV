@@ -39,6 +39,14 @@ module tb_protected_offload;
   logic [2:0] completion_fault_stage;
   logic [6:0] completion_vectors_done;
   logic [2:0] submit_occupancy, completion_occupancy;
+  logic completion_published;
+  logic [7:0] completion_publish_tag, completion_publish_asid;
+  logic [3:0] completion_publish_status;
+  logic [2:0] completion_publish_fault_stage;
+  logic [6:0] completion_publish_vectors_done;
+  logic [4:0] owned_valid;
+  logic [4:0][31:0] owned_start, owned_end, owned_input_start, owned_input_end;
+  logic [4:0][31:0] owned_output_start, owned_output_end;
   logic [11:0] paddr;
   logic psel, penable, pwrite, pready, pslverr;
   logic [31:0] pwdata, prdata;
@@ -60,12 +68,14 @@ module tb_protected_offload;
   integer cycles, failures, reads, writes, translations, stalls, irq_cycles, job_start_cycle;
   integer event_fd;
   logic [31:0] expected_word;
+  logic [1:0] bank_referenced;
 
   protected_offload_dma dut (
     .clk, .rst_n, .submit_valid, .submit_ready, .submit_input_iova,
     .submit_output_iova, .submit_input_stride, .submit_output_stride, .submit_k,
     .submit_batch, .submit_tag, .submit_asid, .submit_bank,
-    .submit_bank_generation, .submit_qos, .bank_generation, .submit_accepted,
+    .submit_bank_generation, .submit_qos, .bank_generation,
+    .block_submissions(1'b0), .submit_accepted,
     .submit_rejected, .xlate_req_valid, .xlate_req_ready, .xlate_req_iova,
     .xlate_req_asid, .xlate_req_write, .xlate_rsp_valid, .xlate_rsp_ready,
     .xlate_rsp_paddr, .xlate_rsp_fault, .mem_req_valid, .mem_req_ready,
@@ -77,7 +87,12 @@ module tb_protected_offload;
     .accel_out_data, .accel_out_tag, .completion_valid, .completion_ready,
     .completion_tag, .completion_status, .completion_asid,
     .completion_fault_iova, .completion_fault_stage, .completion_vectors_done,
-    .irq, .busy, .submit_occupancy, .completion_occupancy);
+    .completion_published, .completion_publish_tag, .completion_publish_asid,
+    .completion_publish_status, .completion_publish_fault_stage,
+    .completion_publish_vectors_done, .irq, .busy, .submit_occupancy,
+    .completion_occupancy, .bank_referenced, .owned_valid, .owned_start,
+    .owned_end, .owned_input_start, .owned_input_end,
+    .owned_output_start, .owned_output_end);
 
   protected_offload_apb_csr csr (
     .clk, .rst_n, .paddr, .psel, .penable, .pwrite, .pwdata, .prdata,
@@ -274,6 +289,7 @@ module tb_protected_offload;
     program_and_submit();
     if (bad_generation != 0) begin
       repeat (2) @(negedge clk);
+      $display("MUTATION_DIAG|category=bank_generation_guard|sticky_reject=%0d|busy=%0d",csr.sticky_submit_reject,busy);
       if (!csr.sticky_submit_reject || busy) failures++;
       apb_read(12'h01c, 0);
       apb_write(12'h030, 32'h1);
@@ -296,16 +312,21 @@ module tb_protected_offload;
     while (!completion_valid && cycles < 10000) @(posedge clk);
     if (!completion_valid) begin
       $display("PROTECTED_OFFLOAD|status=FAIL|reason=timeout");
+      if (perf_accepted != 0 && perf_input_chunks < (k_value/4)*batch_value)
+        $display("MUTATION_DIAG|category=input_chunk_accounting|expected=%0d|observed=%0d|accepted_commands=%0d",(k_value/4)*batch_value,perf_input_chunks,perf_accepted);
       $fatal(1);
     end
     $display("COMPLETION_OBSERVED|tag=%0d|asid=%0d|status=%0d|vectors=%0d|stage=%0d",
       completion_tag, completion_asid, completion_status, completion_vectors_done,
       completion_fault_stage);
-    if (completion_tag != 8'h35 || completion_asid != 8'(asid_value)) failures++;
+    if (completion_tag != 8'h35 || completion_asid != 8'(asid_value)) begin
+      $display("MUTATION_DIAG|category=response_identity|expected_tag=53|observed_tag=%0d|expected_asid=%0d|observed_asid=%0d",completion_tag,asid_value,completion_asid);
+      failures++;
+    end
     case (fault_kind)
-      0: if (completion_status != 0 || int'(completion_vectors_done) != batch_value) failures++;
-      1: if (completion_status != 2 || completion_fault_stage != 1) failures++;
-      2: if (completion_status != 3 || completion_fault_stage != 3) failures++;
+      0: if (completion_status != 0 || int'(completion_vectors_done) != batch_value) begin $display("MUTATION_DIAG|category=completion_accounting|expected_vectors=%0d|observed_vectors=%0d|status=%0d",batch_value,completion_vectors_done,completion_status); failures++; end
+      1: if (completion_status != 2 || completion_fault_stage != 1) begin $display("MUTATION_DIAG|category=input_permission_containment|expected_status=2|observed_status=%0d|stage=%0d",completion_status,completion_fault_stage); failures++; end
+      2: if (completion_status != 3 || completion_fault_stage != 3) begin $display("MUTATION_DIAG|category=output_permission_containment|expected_status=3|observed_status=%0d|stage=%0d",completion_status,completion_fault_stage); failures++; end
       3: if (completion_status != 4 || completion_fault_stage != 2) failures++;
       4: if (completion_status != 5 || completion_fault_stage != 4) failures++;
       5: if (completion_status != 6 || completion_fault_stage != 5) failures++;

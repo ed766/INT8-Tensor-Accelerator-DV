@@ -1,0 +1,23 @@
+[tasks]
+prove
+cover
+
+[options]
+prove: mode bmc
+prove: depth 24
+cover: mode cover
+cover: depth 96
+
+[engines]
+smtbmc boolector
+
+[script]
+read -formal -D SYNTHESIS -D FORMAL -sv protected_queue_count_next.sv protected_offload_dma.sv protected_irq_aggregator.sv protected_tlb_control_apb.sv protected_crossover_control_formal.sv
+prep -top protected_crossover_control_formal
+
+[files]
+../rtl/protected_queue_count_next.sv
+../rtl/protected_offload_dma.sv
+../rtl/protected_irq_aggregator.sv
+../rtl/protected_tlb_control_apb.sv
+protected_crossover_control_formal.sv

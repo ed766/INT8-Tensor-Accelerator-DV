@@ -5,6 +5,7 @@ module tb_protected_iommu;
   logic[31:0]root_pt_addr,req_iova,rsp_paddr;logic[7:0]req_asid;logic[1:0]rsp_fault;
   logic inv_valid,inv_all;logic[7:0]inv_asid;logic ptw_req_valid,ptw_req_ready,ptw_rsp_valid,ptw_rsp_ready,ptw_rsp_error;
   logic[31:0]ptw_req_addr,ptw_rsp_data,perf_tlb_hits,perf_tlb_misses,perf_walk_reads,perf_faults;
+  logic idle;
   logic deny_page;int failures=0;
 
   dma_iommu #(.TLB_ENTRIES(4)) dut(.*);

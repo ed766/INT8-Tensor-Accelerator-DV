@@ -42,9 +42,9 @@ This project is the portfolio's ML/datapath example. It shows how a PyTorch mode
 | Protected-offload seeded RTL | `100 / 100` |
 | Protected-offload trace replay | `205 / 205` |
 | Protected-offload coverage / crosses | `77 / 77; 64 / 64` |
-| Protected-offload RTL mutations | `12 / 12` |
-| Protected-offload bounded properties | `10 / 10` |
-| Protected-offload component checks | `3 / 4` |
+| Existing protected-offload mutations | `12 / 12` |
+| Protected-offload bounded properties | `16 / 16` |
+| Protected-offload component checks | `7 / 7` |
 | Protected-offload GCC/RV32 execution | `24 / 24` |
 | Firmware-owned fabric execution | `32 / 32` |
 | Firmware-owned seeded integration | `100 / 100` |
@@ -52,9 +52,21 @@ This project is the portfolio's ML/datapath example. It shows how a PyTorch mode
 | Cached ownership positive / negative | `8 / 8; 4 / 4` |
 | Matched five-path performance | `150 / 150` |
 | Single-core chiplet + INT8 orchestration | `2 / 2` |
-| Firmware reset epochs | `4 / 4` |
+| Firmware reset epochs | `6 / 6` |
 | Firmware page-table recovery | `4 / 4` |
-| Protected-offload line coverage | `raw 289 / 341 (84.75%)` |
+| RV32M compute-crossover directed RTL | `48 / 48` |
+| Compute-crossover transaction replay | `48 / 48` |
+| Seeded crossover model replay | `100 / 100` |
+| Schema-3 crossover smoke replay | `1 / 1` |
+| Cache-enabled schema-3 crossover replay | `1 / 1` |
+| Crossover checker qualification | `29 negative + 7 controls` |
+| Legacy crossover reachability | `34 / 34` |
+| Required crossover predicates | `15 / 15` |
+| Crossover event-correlated crosses | `53 / 53` |
+| Crossover RTL mutations detected | `12 / 12` |
+| Crossover formal/property groups | `16 / 16` |
+| Crossover raw integrated-top code coverage | `744 / 890 native lines (83.60%); branch 717 / 926 (77.43%); expression 78.34%; toggle 47.38%` |
+| Standalone protected-offload line coverage | `raw 289 / 341 (84.75%)` |
 <!-- END GENERATED METRICS -->
 
 See [project metrics](docs/project_metrics.md), the [verification plan](docs/verification_plan.md), the [FX graph compiler](docs/fx_graph_compiler.md), and the [two-layer PyTorch demonstration](docs/pytorch_mlp_demo.md).
@@ -109,17 +121,42 @@ controller prefetches a complete vector before issuing the accelerator command,
 waits for the output memory acknowledgement before success, and reports precise
 fault stage and completed-vector count through a level interrupt.
 
-Measured evidence includes `40 / 40` directed and `100 / 100` seeded RTL jobs,
-`205 / 205` independent trace replays, `77 / 77` functional points, `64 / 64`
-same-execution crosses, `10 / 10` mutation detections, and `10 / 10` solver
-properties. A `24 / 24` GCC matrix boots eight workflows at three optimization
-levels on RV32, traverses APB and the integrated two-level-walk IOMMU, and checks
-the result mailbox plus final memory. Focused checks additionally exercise the
-new 32-to-64-bit AXI lane adapter. The executable crossover additionally passes
-`32 / 32` firmware-owned fabric jobs, `36 / 36` RV32I/RV32IM compiler runs,
-`100 / 100` integration seeds, `8 / 8` cached ownership cases plus `4 / 4`
-detected negatives, `12 / 12` mutations, and a matched `150 / 150` five-path
-cycle study.
+The legacy protected-offload reports retain their historical `40 / 40` directed,
+`100 / 100` seeded, compiler, cache-ownership, and matched-performance results.
+The newer crossover evidence is intentionally separated: strict replay passes
+`48 / 48` directed configurations, each with a separately generated scenario
+routine and trace-checked SRAM side effect, plus `100 / 100` seeded
+firmware/DMA workloads and `100 / 100` generated RV32M instruction streams.
+The setup/teardown harness is shared; the directed scenario routines are
+distinct generated images, not 48 independently authored applications.
+Trace evidence closes `15 / 15`
+required predicates and `53 / 53` versioned event-correlated bins, with
+high-risk bins independently witnessed by activating-source provenance, including
+`19 / 19` separately authored firmware executions with strict model replay.
+These coverage results do not establish overall release closure. The crossover-specific mutation matrix
+detects `12 / 12` defects; all `16 / 16` reported formal/property groups pass
+with reachable covers, including bounded safety checks and a completion-order
+property paired with a strict RTL trace witness. Integrated-top raw code coverage
+is `744 / 890` native line points (`83.60%`), branch coverage is
+`717 / 926` (`77.43%`), expression coverage is `78.34%`, and raw toggle
+coverage is `47.38%`, below its `95%` line / `90%` branch targets. Coverage
+includes 48 directed configurations, 100 firmware/DMA seeds, 100 RV32M
+instruction streams, and 8 cache-ownership cases. The new
+control RTL alone reaches `119 / 124` line (`95.97%`) and `174 / 190` branch
+(`91.58%`) coverage with zero reviewed exclusions; imported and
+CPU RTL keep the integrated aggregate below target. One APB case explicitly
+holds `PREADY` high in SETUP and the release checker verifies one later ACCESS
+completion per setup operation. It uses pinned
+Verilator 5.049; SVA runs separately in the asserted regression. See the
+[evidence dashboard](docs/compute_crossover_evidence_dashboard.md) for the
+remaining code-coverage blocker and evidence boundaries.
+The dashboard maps each requirement to its stimulus, checker, trace window,
+and remaining gap.
+
+The RV32M compute-crossover lane is deliberately reported separately. Its M
+arithmetic rows, including interrupt-timing rows, are trace-backed after the
+shared dispatch fix. See the [crossover coverage report](reports/compute_crossover_coverage.md)
+for predicate witnesses and the distinct interaction-bin model.
 
 ![Matched RV32I/RV32IM/accelerator speedup](docs/images/protected_offload_matched_speedup.svg)
 
@@ -151,6 +188,11 @@ The exact behavior is defined in the [numerical contract](docs/numerical_contrac
 7. A packed transaction stream and synthesizable health monitor provide the same command/result contract for simulation now and a future FPGA host later.
 
 ## Reviewer Quick Path
+
+Install `requirements.txt` in the selected PyTorch environment. The optional
+protected-offload/combined-host lane also requires
+`python -m pip install -r requirements-verification.txt` in that same environment
+for its independent AES reference checker.
 
 ```bash
 make project-check PYTHON=/path/to/pytorch/python

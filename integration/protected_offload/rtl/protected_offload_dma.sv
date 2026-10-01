@@ -24,6 +24,7 @@ module protected_offload_dma #(
   input  logic [7:0] submit_bank_generation,
   input  logic [3:0] submit_qos,
   input  logic [1:0][7:0] bank_generation,
+  input  logic block_submissions,
   output logic submit_accepted,
   output logic submit_rejected,
 
@@ -71,10 +72,31 @@ module protected_offload_dma #(
   output logic [31:0] completion_fault_iova,
   output logic [2:0] completion_fault_stage,
   output logic [6:0] completion_vectors_done,
+  output logic completion_published,
+  output logic [TAG_W-1:0] completion_publish_tag,
+  output logic [ASID_W-1:0] completion_publish_asid,
+  output logic [3:0] completion_publish_status,
+  output logic [2:0] completion_publish_fault_stage,
+  output logic [6:0] completion_publish_vectors_done,
   output logic irq,
   output logic busy,
   output logic [2:0] submit_occupancy,
-  output logic [2:0] completion_occupancy
+  output logic [2:0] completion_occupancy,
+  // A generation remains owned from queue admission until its completion is
+  // committed.  The APB configuration block uses this to reject rewrites.
+  output logic [1:0] bank_referenced,
+  // Verification-visible cache ownership spans.  Entry QUEUE_DEPTH is the
+  // active descriptor; lower entries are queued descriptors.
+  output logic [QUEUE_DEPTH:0] owned_valid,
+  output logic [QUEUE_DEPTH:0][31:0] owned_start,
+  output logic [QUEUE_DEPTH:0][31:0] owned_end,
+  output logic [QUEUE_DEPTH:0][31:0] owned_input_start,
+  output logic [QUEUE_DEPTH:0][31:0] owned_input_end,
+  output logic [QUEUE_DEPTH:0][31:0] owned_output_start,
+  output logic [QUEUE_DEPTH:0][31:0] owned_output_end
+`ifdef FORMAL
+  , output logic [4:0] formal_state
+`endif
 );
   localparam int QW = $clog2(QUEUE_DEPTH);
   localparam int CW = $clog2(COMPLETION_DEPTH);
@@ -123,11 +145,23 @@ module protected_offload_dma #(
     OUTPUT_MEM_REQ, OUTPUT_MEM_WAIT, NEXT_VECTOR, RETIRE
   } state_t;
 
-  descriptor_t submit_fifo [QUEUE_DEPTH];
-  completion_t completion_fifo [COMPLETION_DEPTH];
+  // Explicit packed element widths preserve both memory dimensions in the
+  // open-source formal frontend; decoded entries retain the named structs.
+  localparam int DESCRIPTOR_W = 123 + TAG_W + ASID_W;
+  localparam int COMPLETION_W = 46 + TAG_W + ASID_W;
+  logic [DESCRIPTOR_W-1:0] submit_fifo [0:QUEUE_DEPTH-1];
+  logic [COMPLETION_W-1:0] completion_fifo [0:COMPLETION_DEPTH-1];
+  completion_t completion_head_entry;
   logic [31:0] input_buffer [CHUNKS];
   descriptor_t active;
+  descriptor_t queue_tag_entry;
+  descriptor_t queue_bank_entry;
+  completion_t queue_completion_entry;
+  descriptor_t queue_owned_entry;
   state_t state;
+`ifdef FORMAL
+  assign formal_state = state;
+`endif
   logic [QW-1:0] submit_head, submit_tail;
   logic [CW-1:0] completion_head, completion_tail;
   logic [QW:0] submit_count;
@@ -149,8 +183,10 @@ module protected_offload_dma #(
   logic address_overflow, buffers_overlap;
 
   function automatic logic legal_k(input logic [6:0] value);
-    return value == 7'd4 || value == 7'd8 || value == 7'd16 ||
-           value == 7'd32 || value == 7'd64;
+    begin
+      legal_k = value == 7'd4 || value == 7'd8 || value == 7'd16 ||
+                value == 7'd32 || value == 7'd64;
+    end
   endfunction
 
   always_comb begin
@@ -161,11 +197,24 @@ module protected_offload_dma #(
     address_overflow = submit_batch == 0 || input_end_calc[63:32] != 0 || output_end_calc[63:32] != 0;
     buffers_overlap = !address_overflow &&
       !((input_end_calc[31:0] < submit_output_iova) || (output_end_calc[31:0] < submit_input_iova));
+`ifdef PROTECTED_MUT_TAG_REUSE
+    duplicate_tag = 1'b0;
+`else
     duplicate_tag = busy && active.tag == submit_tag;
     for (int i = 0; i < QUEUE_DEPTH; i++) begin
-      if (i < int'(submit_count) && submit_fifo[QW'(submit_head + QW'(i))].tag == submit_tag)
+      queue_tag_entry = submit_fifo[QW'(submit_head + QW'(i))];
+      if (i < int'(submit_count) && queue_tag_entry.tag == submit_tag)
         duplicate_tag = 1'b1;
     end
+    // A completion is still software-visible work.  Keep its tag reserved
+    // until the completion FIFO entry is consumed.  This also rejects a
+    // same-cycle pop/submit race because the FIFO is sampled pre-clock.
+    for (int i = 0; i < COMPLETION_DEPTH; i++) begin
+      queue_completion_entry = completion_fifo[CW'(completion_head + CW'(i))];
+      if (i < int'(completion_count) && queue_completion_entry.tag == submit_tag)
+        duplicate_tag = 1'b1;
+    end
+`endif
     submit_legal = legal_k(submit_k) && submit_batch != 0 &&
                    submit_input_iova[1:0] == 0 && submit_output_iova[1:0] == 0 &&
                    submit_input_stride >= 16'(submit_k) && submit_output_stride >= 16'd4 &&
@@ -177,10 +226,16 @@ module protected_offload_dma #(
 `endif
   end
 
-  assign submit_ready = submit_count < (QW+1)'(QUEUE_DEPTH);
+  assign submit_ready = !block_submissions && submit_count < (QW+1)'(QUEUE_DEPTH);
   assign submit_push = submit_valid && submit_ready && submit_legal;
   assign submit_pop = state == IDLE && submit_count != 0;
   assign completion_push = state == RETIRE && completion_count < (CW+1)'(COMPLETION_DEPTH);
+  assign completion_published = completion_push;
+  assign completion_publish_tag = active.tag;
+  assign completion_publish_asid = active.asid;
+  assign completion_publish_status = retire_status;
+  assign completion_publish_fault_stage = retire_fault_stage;
+  assign completion_publish_vectors_done = retire_vectors_done;
   assign completion_pop = completion_valid && completion_ready;
   protected_queue_count_next #(.WIDTH(QW+1)) submit_counter (
     .count(submit_count),.push(submit_push),.pop(submit_pop),.next_count(submit_count_next));
@@ -188,20 +243,88 @@ module protected_offload_dma #(
     .count(completion_count),.push(completion_push),.pop(completion_pop),.next_count(completion_count_next));
   assign submit_occupancy = 3'(submit_count);
   assign completion_occupancy = 3'(completion_count);
+  always_comb begin
+    bank_referenced = '0;
+    if (busy)
+      bank_referenced[active.bank] = 1'b1;
+    for (int i = 0; i < QUEUE_DEPTH; i++) begin
+      queue_bank_entry = submit_fifo[QW'(submit_head + QW'(i))];
+      if (i < int'(submit_count))
+        bank_referenced[queue_bank_entry.bank] = 1'b1;
+    end
+  end
+
+  function automatic logic [31:0] line_start(input logic [31:0] address);
+    begin
+      line_start = address & 32'hffff_ffe0;
+    end
+  endfunction
+  function automatic logic [31:0] line_end(input logic [31:0] address);
+    begin
+      line_end = address | 32'h0000_001f;
+    end
+  endfunction
+  function automatic logic [31:0] descriptor_end(input descriptor_t descriptor, input logic is_output);
+    logic [63:0] end_address;
+    begin
+      if (is_output)
+        end_address = {32'd0, descriptor.output_iova} +
+          ({57'd0, descriptor.batch} - 1'b1) * descriptor.output_stride + 64'd3;
+      else
+        end_address = {32'd0, descriptor.input_iova} +
+          ({57'd0, descriptor.batch} - 64'd1) * descriptor.input_stride + {57'd0, descriptor.k} - 64'd1;
+      descriptor_end = end_address[31:0];
+    end
+  endfunction
+
+  always_comb begin
+    owned_valid = '0;
+    owned_start = '0;
+    owned_end = '0;
+    owned_input_start = '0;
+    owned_input_end = '0;
+    owned_output_start = '0;
+    owned_output_end = '0;
+    queue_owned_entry = '0;
+    for (int i = 0; i < QUEUE_DEPTH; i++) begin
+      if (i < int'(submit_count)) begin
+        queue_owned_entry = submit_fifo[QW'(submit_head + QW'(i))];
+        owned_valid[i] = 1'b1;
+        owned_input_start[i] = line_start(queue_owned_entry.input_iova);
+        owned_input_end[i] = line_end(descriptor_end(queue_owned_entry, 1'b0));
+        owned_output_start[i] = line_start(queue_owned_entry.output_iova);
+        owned_output_end[i] = line_end(descriptor_end(queue_owned_entry, 1'b1));
+        // Retain the legacy envelope for trace compatibility, but never use
+        // it for ownership enforcement: input and output are separate spans.
+        owned_start[i] = owned_input_start[i] < owned_output_start[i] ? owned_input_start[i] : owned_output_start[i];
+        owned_end[i] = owned_input_end[i] > owned_output_end[i] ? owned_input_end[i] : owned_output_end[i];
+      end
+    end
+    if (busy) begin
+      owned_valid[QUEUE_DEPTH] = 1'b1;
+      owned_input_start[QUEUE_DEPTH] = line_start(active.input_iova);
+      owned_input_end[QUEUE_DEPTH] = line_end(descriptor_end(active, 1'b0));
+      owned_output_start[QUEUE_DEPTH] = line_start(active.output_iova);
+      owned_output_end[QUEUE_DEPTH] = line_end(descriptor_end(active, 1'b1));
+      owned_start[QUEUE_DEPTH] = owned_input_start[QUEUE_DEPTH] < owned_output_start[QUEUE_DEPTH] ? owned_input_start[QUEUE_DEPTH] : owned_output_start[QUEUE_DEPTH];
+      owned_end[QUEUE_DEPTH] = owned_input_end[QUEUE_DEPTH] > owned_output_end[QUEUE_DEPTH] ? owned_input_end[QUEUE_DEPTH] : owned_output_end[QUEUE_DEPTH];
+    end
+  end
   assign completion_valid = completion_count != 0;
+  assign completion_head_entry = completion_fifo[completion_head];
 `ifdef PROTECTED_MUT_WRONG_RESPONSE_TAG
-  assign completion_tag = completion_fifo[completion_head].tag ^ 8'h1;
+  assign completion_tag = completion_head_entry.tag ^ 8'h1;
 `else
-  assign completion_tag = completion_fifo[completion_head].tag;
+  assign completion_tag = completion_head_entry.tag;
 `endif
-  assign completion_status = completion_fifo[completion_head].status;
-  assign completion_asid = completion_fifo[completion_head].asid;
-  assign completion_fault_iova = completion_fifo[completion_head].fault_iova;
-  assign completion_fault_stage = completion_fifo[completion_head].fault_stage;
+  assign completion_status = completion_head_entry.status;
+  assign completion_asid = completion_head_entry.asid;
+  assign completion_fault_iova = completion_head_entry.fault_iova;
+  assign completion_fault_stage = completion_head_entry.fault_stage;
 `ifdef PROTECTED_MUT_WRONG_VECTOR_COUNT
-  assign completion_vectors_done = completion_fifo[completion_head].vectors_done + 1'b1;
+  assign completion_vectors_done = completion_head_entry.vectors_done + 1'b1;
 `else
-  assign completion_vectors_done = completion_fifo[completion_head].vectors_done;
+  assign completion_vectors_done = completion_head_entry.vectors_done;
 `endif
 `ifdef PROTECTED_MUT_LOST_IRQ
   assign irq = 1'b0;
@@ -214,11 +337,7 @@ module protected_offload_dma #(
 
   always_comb begin
     xlate_req_valid = state == INPUT_XLATE_REQ || state == OUTPUT_XLATE_REQ;
-`ifdef PROTECTED_MUT_STALE_TRANSLATION
-    xlate_req_iova = current_input_iova;
-`else
     xlate_req_iova = state == OUTPUT_XLATE_REQ ? current_output_iova : current_input_iova;
-`endif
 `ifdef PROTECTED_MUT_WRONG_ASID
     xlate_req_asid = active.asid ^ 8'h1;
 `else
@@ -298,13 +417,14 @@ module protected_offload_dma #(
         completion_head <= completion_head + 1'b1;
       end
 
+      // Doorbells are one-cycle attempts, not a held streaming VALID. A full
+      // queue must report rejection rather than silently losing the request.
+      if (submit_valid && !submit_ready) submit_rejected <= 1'b1;
       if (submit_valid && submit_ready) begin
         if (submit_legal) begin
-          submit_fifo[submit_tail] <= '{
-            input_iova: submit_input_iova, output_iova: submit_output_iova,
-            input_stride: submit_input_stride, output_stride: submit_output_stride,
-            k: submit_k, batch: submit_batch, tag: submit_tag, asid: submit_asid,
-            bank: submit_bank, bank_gen: submit_bank_generation, qos: submit_qos};
+          submit_fifo[submit_tail] <= {submit_input_iova, submit_output_iova,
+            submit_input_stride, submit_output_stride, submit_k, submit_batch,
+            submit_tag, submit_asid, submit_bank, submit_bank_generation, submit_qos};
           submit_tail <= submit_tail + 1'b1;
           submit_accepted <= 1'b1;
         end else begin
@@ -394,9 +514,8 @@ module protected_offload_dma #(
           end
         end
         RETIRE: if (completion_count < (CW+1)'(COMPLETION_DEPTH)) begin
-          completion_fifo[completion_tail] <= '{tag: active.tag, status: retire_status,
-            asid: active.asid, fault_iova: retire_fault_iova,
-            fault_stage: retire_fault_stage, vectors_done: retire_vectors_done};
+          completion_fifo[completion_tail] <= {active.tag, retire_status, active.asid,
+            retire_fault_iova, retire_fault_stage, retire_vectors_done};
           completion_tail <= completion_tail + 1'b1;
           state <= IDLE;
         end
@@ -427,6 +546,8 @@ module protected_offload_dma #(
     submit_count <= (QW+1)'(QUEUE_DEPTH));
   a_completion_queue_bounded: assert property (@(posedge clk) disable iff (!rst_n)
     completion_count <= (CW+1)'(COMPLETION_DEPTH));
+  a_live_tag_is_not_reaccepted: assert property (@(posedge clk) disable iff (!rst_n)
+    duplicate_tag |-> !submit_push);
   a_no_command_after_prefetch_fault: assert property (@(posedge clk) disable iff (!rst_n)
     state == RETIRE && (retire_fault_stage == FS_INPUT_XLATE || retire_fault_stage == FS_INPUT_READ) |-> !accel_cmd_valid);
   a_success_only_after_output_ack: assert property (@(posedge clk) disable iff (!rst_n)

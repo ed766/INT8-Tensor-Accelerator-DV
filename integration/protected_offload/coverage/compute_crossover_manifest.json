@@ -1,0 +1,146 @@
+{
+  "version": 7,
+  "evidence_rule": "Each bin requires an executable RTL trace, strict schema-3 transaction replay, and an independent oracle for the behavior claimed.",
+  "trace_schema": {
+    "version": 3,
+    "sampling": "Handshakes are sampled on posedge when VALID && READY; retirement and response events describe the pre-NBA values sampled at that edge.",
+    "ordering": "Monotonic eid records same-edge observer order; reset assertion emits pending ownership before cancellation and increments epoch at that boundary.",
+    "axi": "Host AW/W/B and AR/R are observed for cache master 0 and direct master 3. Write summaries are emitted per accepted W beat only after successful B; read beats retain ID, owner, address, size, response, and RLAST.",
+    "source_identity": "Every event in one run carries the same source_build_id, hashing active RTL sources and the compiled firmware ELF.",
+    "independent_replay": ["RV32 ISS", "byte-addressed committed memory with host AXI writes and DMA read/write checks", "Sv32 page-table and ASID/TLB model", "integer accelerator model", "descriptor and maintenance lifecycle"]
+  },
+  "families": [
+    "cpu_rv32m", "apb_axi", "queues_configuration", "translation_recovery",
+    "interrupts", "cache_ownership", "combined_services", "reset_transport"
+  ],
+  "required_scenario_intent_counts": {
+    "cpu_rv32m": 6,
+    "apb_axi": 6,
+    "queues_configuration": 6,
+    "translation_recovery": 6,
+    "interrupts": 6,
+    "cache_ownership": 6,
+    "combined_services": 6,
+    "reset_transport": 6
+  },
+  "required_scenario_intents": {
+    "cpu_rv32m__case_1": "m_result_to_address",
+    "cpu_rv32m__case_2": "m_result_to_descriptor",
+    "cpu_rv32m__case_3": "load_m_store_dependency",
+    "cpu_rv32m__case_4": "m_result_to_branch",
+    "cpu_rv32m__case_5": "device_irq_during_div",
+    "cpu_rv32m__case_6": "reset_unconsumed_m_result",
+    "apb_axi__case_1": "setup_pready_waits_for_access",
+    "apb_axi__case_2": "waited_read_and_write_retire",
+    "apb_axi__case_3": "lower_upper_axi_word_lanes",
+    "apb_axi__case_4": "region_edges_and_decode_holes",
+    "apb_axi__case_5": "unsupported_width_and_alignment_traps",
+    "apb_axi__case_6": "reset_after_aw_before_w",
+    "queues_configuration__case_1": "submit_fifo_pressure",
+    "queues_configuration__case_2": "completion_fifo_pressure",
+    "queues_configuration__case_3": "publish_pop_same_cycle",
+    "queues_configuration__case_4": "duplicate_unread_completion_tag_rejected",
+    "queues_configuration__case_5": "referenced_bank_rewrite_rejected",
+    "queues_configuration__case_6": "inactive_bank_update_and_generation_rollover",
+    "translation_recovery__fault_1": "read_permission_denial",
+    "translation_recovery__fault_2": "write_permission_denial",
+    "translation_recovery__fault_3": "cached_permission_downgrade_upgrade",
+    "translation_recovery__fault_4": "same_iova_asid_isolation",
+    "translation_recovery__input_bus_error": "targeted_and_global_remap_invalidation",
+    "translation_recovery__case_6": "partial_output_remap_retry",
+    "reset_transport__case_1": "reset_during_ptw_req_recovery",
+    "reset_transport__case_2": "reset_during_mem_req_recovery",
+    "reset_transport__case_3": "reset_during_accepted_output_write_recovery",
+    "reset_transport__case_4": "reset_during_completion_irq_recovery",
+    "reset_transport__case_5": "reset_during_maintenance_invalidation_recovery",
+    "reset_transport__case_6": "prolonged_backpressure_drain_or_reset",
+    "interrupts__case_1": "masked_completion_then_enable_and_ack",
+    "interrupts__case_2": "simultaneous_irq_event_and_w1c",
+    "interrupts__case_3": "both_device_sources_pending",
+    "interrupts__case_4": "external_before_timer_priority",
+    "interrupts__case_5": "completion_at_wfi_boundary",
+    "interrupts__case_6": "interrupt_delayed_by_apb_or_m_retirement",
+    "cache_ownership__case_1": "dirty_input_flush_before_submit",
+    "cache_ownership__case_2": "stale_output_invalidated_after_completion",
+    "cache_ownership__case_3": "dirty_destination_protected",
+    "cache_ownership__case_4": "line_boundary_and_shared_line_ownership",
+    "cache_ownership__case_5": "maintenance_error_recovery",
+    "cache_ownership__case_6": "unrelated_cpu_buffer_access_permitted",
+    "combined_services__case_1": "measured_aes_int8_overlap",
+    "combined_services__case_2": "independent_service_completion_order",
+    "combined_services__case_3": "chiplet_failure_int8_success",
+    "combined_services__case_4": "int8_failure_chiplet_success",
+    "combined_services__case_5": "chiplet_sleep_resume_during_overlap",
+    "combined_services__case_6": "coordinated_reset_with_both_services_active"
+  },
+  "required_events": ["RETIRE", "M_RETIRE", "APB", "XLATE_REQ", "XLATE_RSP", "PTW_REQ", "PTW_RSP", "PTE_WRITE", "TLB_INVALIDATE", "AXI_AW", "AXI_W", "AXI_B", "AXI_WRITE", "AXI_AR", "AXI_R", "MEM_REQ", "MEM_RSP", "SUBMIT", "SUBMIT_REJECT", "DMA_ACTIVE_START", "DMA_ACTIVE_END", "COMPLETE_PUBLISH", "COMPLETE", "MAINT_START", "MAINT_DONE", "FIRMWARE_DONE"],
+  "required_predicates": [
+    "rv32m_dma_overlap", "apb_wait_state", "reset_epoch_recovery", "translation_fault",
+    "interrupt_delivery", "completion_after_memory", "referenced_bank_rejection",
+    "unrelated_cpu_access_during_owned_buffers", "aes_int8_overlap", "transport_backpressure",
+    "chiplet_sleep_wake_during_offload", "rv32m_interrupt_pending_at_retirement",
+    "transport_payload_identity", "independent_translation_result", "maintenance_lifecycle"
+  ],
+  "required_cross_families": [
+    "m_opcode_x_dma_lifecycle",
+    "m_result_x_consumer_dependency",
+    "apb_direction_x_realized_wait_x_response",
+    "interrupt_source_x_arrival_phase",
+    "completion_fifo_occupancy_x_publish_pop",
+    "maintenance_command_x_observed_result",
+    "device_event_x_interrupt_retirement",
+    "translation_access_x_tlb_x_permission",
+    "descriptor_phase_x_tag_lifetime",
+    "output_commit_x_completion_visibility",
+    "reset_phase_x_outstanding_owner",
+    "reset_phase_x_owner_type",
+    "error_stage_x_committed_prefix_x_recovery",
+    "maintenance_start_x_completion",
+    "cache_ownership_x_cpu_access",
+    "chiplet_busy_x_accelerator_activity"
+  ],
+  "cross_bin_policy": "The required bins below are a reviewed, fixed tuple set. Unlisted Cartesian combinations are not claimed as closed; they require a later manifest revision with stimulus, applicability rationale, and trace witnesses. The generator must emit every listed bin, including NOT_REACHED bins, so its denominator never shrinks when evidence disappears.",
+  "required_cross_bins": {
+    "apb_direction_x_realized_wait_x_response": [
+      "read:0:ok", "read:1:ok", "read:2_3:ok", "read:4_plus:ok",
+      "write:0:error", "write:0:ok", "write:1:ok", "write:2_3:ok", "write:4_plus:ok"
+    ],
+    "cache_ownership_x_cpu_access": ["unrelated_cpu_access_permitted"],
+    "chiplet_busy_x_accelerator_activity": ["overlapping_service_activity"],
+    "completion_fifo_occupancy_x_publish_pop": ["low:simultaneous"],
+    "descriptor_phase_x_tag_lifetime": ["active_tag_reuse_rejected"],
+    "device_event_x_interrupt_retirement": ["irq_set_then_architectural_take"],
+    "interrupt_source_x_arrival_phase": ["device:idle_or_boundary", "device:mdiv"],
+    "m_opcode_x_dma_lifecycle": [
+      "DIV:active", "DIV:outside", "DIVU:active", "MUL:active", "MUL:outside",
+      "MULH:active", "MULHSU:active", "MULHU:active", "REM:active", "REMU:active"
+    ],
+    "m_result_x_consumer_dependency": [
+      "m_result_to_load_address", "m_result_to_store_data",
+      "load_m_store_dependency", "m_result_to_branch"
+    ],
+    "maintenance_command_x_observed_result": ["0:ok", "1:ok"],
+    "maintenance_start_x_completion": ["start_then_done"],
+    "output_commit_x_completion_visibility": ["committed_write_before_success_publish"],
+    "reset_phase_x_outstanding_owner": ["pending_owner_reset_recovered"],
+    "reset_phase_x_owner_type": [
+      "ptw_request_pending", "payload_request_pending", "payload_response_pending",
+      "apb_wait_pending", "completion_pending", "host_aw_waiting_w",
+      "muldiv_result_pending"
+    ],
+    "error_stage_x_committed_prefix_x_recovery": [
+      "input_translation:0:contained", "output_page:0:contained",
+      "output_permission:0:contained", "input_memory:0:contained",
+      "partial_output:1:retry_success"
+    ],
+    "translation_access_x_tlb_x_permission": [
+      "read:hit:ok", "read:miss:fault", "read:miss:ok",
+      "write:hit:ok", "write:miss:fault", "write:miss:ok"
+    ]
+  },
+  "cross_evidence_rule": "A cross hit must contain matching event identifiers from one observer trace and must correlate by epoch plus transaction/job identity where those identities are available. A missing required family is emitted as NOT_REACHED and blocks release closure. High-risk bins require two distinct compiled stimulus construction paths: directed firmware, generated CPU instruction stream, or seeded firmware schedule; path labels are derived from run provenance, never scenario-name aliases.",
+  "limitations": [
+    "This manifest reports observed firmware integration behavior; CPU-only RV32M arithmetic vectors remain separately reported by the chiplet repository.",
+    "Fault completions do not require ACCEL_CMD because translation containment occurs before compute dispatch."
+  ]
+}

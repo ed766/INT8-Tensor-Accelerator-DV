@@ -1,0 +1,2 @@
+# Independent AES reference model used by combined-host trace checking.
+cryptography==46.0.5

@@ -1,0 +1,26 @@
+requirement,result,value,evidence
+strict_release_gate,PASS,exit_code=0,local isolated source snapshots
+chiplet_source_tree,PASS,626d9d6ea0b9401e7ec19e6be1db21329ee850c6,immutable Git tree
+accelerator_source_tree,PASS,17568b52df722d8e915593e2b1689a6d4bbfd69a,immutable Git tree
+directed_and_replay,PASS,48/48,fresh simulation and independent replay
+crossover_random_and_replay,PASS,100/100,fresh simulation and independent replay
+cpu_streams_and_replay,PASS,100/100,fresh simulation and independent replay
+independent_drivers_and_replay,PASS,19/19,distinct C driver implementation
+spike,PASS,19/19,required external oracle
+act4_rv32im,PASS,53/53,required external oracle
+coverage_simulations,PASS,257/257,fresh instrumented runs and replay
+required_predicates,PASS,15/15,manifest completeness enforced
+interaction_crosses,PASS,53/53,event witnesses checked
+mutations,PASS,12/12,designated detection and passing controls
+fault_context,PASS,4/4,independent context checker
+reset_context,PASS,6/6,independent context checker
+combined_service_evidence,PASS,2/2,exact AES outputs and committed memory
+formal_properties,PASS,16/16,documented solver mode and depth
+formal_covers,PASS,16/16,reachable cover tasks
+normalized_reproducibility,PASS,12 artifacts,two regeneration passes
+new_control_line,PASS,119/124=95.97%,raw zero exclusions
+new_control_branch,PASS,174/190=91.58%,raw zero exclusions
+integrated_line,PARTIAL,744/890=83.60%,not a whole-integration closure claim
+integrated_branch,PARTIAL,717/926=77.43%,not a whole-integration closure claim
+post_run_tracked_tree,PARTIAL,eight generated CSV differences reconciled after run,updated report baseline requires clean release-tree verification
+published_ci,NOT_RUN,tested RV32IM prerequisite published and pin updated,remote workflow result pending

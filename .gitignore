@@ -13,3 +13,9 @@ integration/protected_offload/formal/protected_queue_count_prove/
 integration/protected_offload/formal/protected_queue_count_cover/
 integration/protected_offload/formal/protected_axi_adapter/
 integration/protected_offload/formal/protected_queue_count/
+integration/protected_offload/formal/protected_crossover_control/
+integration/protected_offload/formal/protected_crossover_control_prove/
+integration/protected_offload/formal/protected_crossover_control_cover/
+integration/protected_offload/formal/protected_completion_drain/
+integration/protected_offload/formal/protected_completion_drain_prove/
+integration/protected_offload/formal/protected_completion_drain_cover/

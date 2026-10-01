@@ -48,6 +48,8 @@ module dma_iommu #(
   logic [1:0] response_fault;
   logic response_hit;
   logic [31:0] accepted_count,response_count;
+  logic walk_active_q;
+  logic [31:0] walk_root_q;
 
   logic [TLB_ENTRIES-1:0] tlb_valid,tlb_superpage,tlb_read,tlb_write,tlb_user,tlb_accessed,tlb_dirty;
   logic [TLB_ENTRIES-1:0][ASID_W-1:0] tlb_asid;
@@ -111,8 +113,13 @@ module dma_iommu #(
       perf_tlb_hits<=0;perf_tlb_misses<=0;perf_walk_reads<=0;perf_faults<=0;accepted_count<=0;response_count<=0;
     end else begin
       if(inv_valid && state==IDLE) begin
+`ifdef PROTECTED_MUT_STALE_TRANSLATION
+        // Intentional mutation: acknowledge invalidation without clearing any
+        // valid translation, modeling a stale-TLB defect at its source.
+`else
         for(int index=0;index<TLB_ENTRIES;index++)
           if(inv_all || tlb_asid[index]==inv_asid) tlb_valid[index]<=0;
+`endif
       end
       case(state)
         IDLE: if(req_valid && req_ready) begin
@@ -165,6 +172,19 @@ module dma_iommu #(
     end
   end
 
+  // Keep the previous-cycle walk context explicitly. This avoids relying on
+  // sampled-value functions in the safety assertion and makes the latched
+  // root stability check portable across open-source SVA frontends.
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      walk_active_q <= 1'b0;
+      walk_root_q <= '0;
+    end else begin
+      walk_active_q <= state != IDLE && state != RESPOND;
+      walk_root_q <= request_root_pt_addr;
+    end
+  end
+
 `ifndef SYNTHESIS
   a_ptw_address_stable: assert property (@(posedge clk) disable iff(!rst_n) ptw_req_valid&&!ptw_req_ready |=> !ptw_req_valid||$stable(ptw_req_addr));
   a_response_stable: assert property (@(posedge clk) disable iff(!rst_n) rsp_valid&&!rsp_ready |=> !rsp_valid||$stable({rsp_paddr,rsp_fault,rsp_tlb_hit}));
@@ -172,7 +192,7 @@ module dma_iommu #(
   a_response_not_ahead: assert property (@(posedge clk) disable iff(!rst_n) response_count<=accepted_count);
   a_invalidate_blocks_accept: assert property (@(posedge clk) disable iff(!rst_n) inv_valid |-> !req_ready);
   a_walk_uses_latched_root: assert property (@(posedge clk) disable iff(!rst_n)
-      state!=IDLE && state!=RESPOND && $past(state)!=IDLE |-> $stable(request_root_pt_addr));
+      state!=IDLE && state!=RESPOND && walk_active_q |-> request_root_pt_addr==walk_root_q);
   a_walk_only_for_miss: assert property (@(posedge clk) disable iff(!rst_n) ptw_req_valid |-> !response_hit);
 `endif
 endmodule

@@ -14,6 +14,7 @@ module protected_irq_aggregator (
   output logic [2:0] enable_mask
 );
   logic [2:0] events, acknowledge;
+  logic [2:0] acknowledged_events_q;
   logic access;
   assign events={device_fault_event,accelerator_event,chiplet_dma_event};
   assign access=psel&&penable;
@@ -38,14 +39,23 @@ module protected_irq_aggregator (
     if(!rst_n) begin raw_status<='0;enable_mask<='0;end
     else begin
       // New events win over a simultaneous W1C acknowledgement.
+`ifdef PROTECTED_MUT_LOST_SIMULTANEOUS_IRQ
+      raw_status<=(raw_status&~acknowledge)|(events&~acknowledge);
+`else
       raw_status<=(raw_status&~acknowledge)|events;
+`endif
       if(access&&pwrite&&!pslverr&&paddr==6'h08)enable_mask<=pwdata[2:0];
     end
   end
 
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) acknowledged_events_q <= '0;
+    else acknowledged_events_q <= events & acknowledge;
+  end
+
 `ifndef SYNTHESIS
   a_set_dominates_ack: assert property(@(posedge clk) disable iff(!rst_n)
-    |(events&acknowledge)|=>|(raw_status&$past(events&acknowledge)));
+    (|acknowledged_events_q) |-> (|(raw_status & acknowledged_events_q)));
   a_irq_matches_enabled_pending: assert property(@(posedge clk) disable iff(!rst_n)
     irq_ext==|(raw_status&enable_mask));
 `endif

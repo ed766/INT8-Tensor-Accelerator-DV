@@ -1,5 +1,36 @@
 # Protected Accelerator Offload
 
+## Python Dependencies
+
+Use the same Python environment for simulation runners and their reference
+models. Install `requirements.txt` for PyTorch and, separately,
+`python -m pip install -r requirements-verification.txt` for the independent
+AES oracle used by the combined-host checker. CI installs both dependency
+sets; a passing firmware mailbox does not replace this numerical check.
+
+`make compute-crossover-clean-check` snapshots both local repositories using
+temporary Git indexes, checks out those snapshots in isolated directories,
+and runs the complete strict crossover target with fresh DUT builds and traces.
+Only pinned third-party tool caches are shared. The source branches and user
+indexes are unchanged. The generated `build/clean-checkout-*/audit.json` records
+source/tree identities and the command result; `closure.log` retains failures.
+This can be a lengthy run. A local snapshot pass does not establish that the
+GitHub workflow reproduced it. Local audit snapshot objects are not release
+commits.
+
+The latest full isolated run passed with exit code zero. Its source-tree hashes
+and measured results are recorded in
+[`compute_crossover_clean_checkout.csv`](../reports/compute_crossover_clean_checkout.csv).
+It regenerated all 257 instrumented executions, qualified all 12 mutations,
+executed required Spike and ACT4 RV32IM checks, and passed 16 formal groups and
+16 cover tasks. This closes local executable reproduction, not remote CI:
+the tested chiplet prerequisites are published at
+`4d1f1639947822e0260ecdab50d3b9bca969d01f` and the workflow now pins that revision.
+Its remote result remains pending. Generated CSV baselines have been reconciled;
+raw solver outputs are ignored and new tasks write under `build/`.
+New integration control reaches raw 95.97% line and 91.58% branch coverage;
+the broader integrated totals remain 83.60% and 77.43%, respectively.
+
 The integration now includes a CPU-independent `protected_offload_service`
 boundary with explicit APB control, payload-memory, page-walk, TLB
 invalidation, firmware configuration, interrupt, and performance interfaces.
@@ -17,8 +48,13 @@ The host, DMA payload, and IOMMU page walker then traverse distinct masters of
 the actual QoS fabric. Its `32 / 32` matrix crosses K, batch size, ASID, QoS,
 and polling versus machine-interrupt/WFI completion. A companion matrix passes
 `36 / 36` executions across `-O0/-O2/-Os` and RV32I/RV32IM. The seeded shared
-integration passes `100 / 100` and closes its versioned `47 / 47` executable
-points and same-run crosses.
+integration passes `100 / 100` seeded executions with strict trace replay.
+Those executions are schedule/workload evidence; they do not close a
+transaction-level cross-coverage denominator.
+Six seeds are reserved as deterministic combined-service overlap witnesses
+with IRQ disabled and `0%` requested AXI backpressure; the other 94 rows retain
+varied IRQ/backpressure schedules. Each combined row still fails unless the
+observer records actual simultaneous AES/INT8 service activity.
 
 The cached lane inserts the provenance-locked 4-KiB L1 only on the CPU payload
 path. Firmware explicitly flushes before device ownership and invalidates before
@@ -26,29 +62,104 @@ CPU reuse. It passes `8 / 8` positive cases, while `4 / 4` intended-negative
 cases prove that omitted maintenance, a late dirty writeback, and CPU access
 during device ownership are detected.
 
+### Crossover Closure
+
+`make compute-crossover-directed` runs `48 / 48` GCC-built configurations
+organized by CPU/RV32M, APB/AXI, queue/configuration, translation/recovery,
+interrupt, cache-ownership, combined-service, and reset/transport risk
+families. A verification-only observer emits retirement, completed APB,
+translation, memory, accelerator, completion, interrupt, maintenance, and
+reset-epoch events from the actual integration top. The independent replay
+requires every response to have an accepted request, every completion to have
+an accepted descriptor, no live transaction at firmware completion, and no
+cross-epoch response. The checked-in [coverage report](../reports/compute_crossover_coverage.md)
+and [evidence dashboard](compute_crossover_evidence_dashboard.md)
+separates historical family/event reachability (`16 / 16`) from executable
+crossover predicates (`15 / 15`) and trace-correlated event-cross bins
+(`53 / 53`). Each bin has explicit event IDs and trace hashes; high-risk bins
+have two independently constructed witnesses. The publish/pop bin specifically
+uses shared and separately authored firmware drivers, with a verification-only
+APB wait policy accounting for the registered CSR pop pulse, to hit same-edge
+publication and consumption. The independent driver suite passes `19 / 19`
+strict model replays. Adding the second witness exposed
+and fixed an over-conservative model check that had blocked a completion while
+an unrelated descriptor still had a write outstanding; the final checker
+accounts writes by descriptor tag and still requires that descriptor's own
+output responses before publication/consumption. These observed bins are separate
+from the accelerator's canonical functional-coverage denominator and are not
+an exhaustive Cartesian product. The strict checker is
+qualified by `25` adversarial traces and `6` valid controls. The prerequisite
+component suite includes the machine-timer APB boundary (`5 / 5`).
+The supported seeded crossover generator includes RV32M-plus-interrupt rows;
+the shared dispatch fix is exercised by the directed and seeded matrices.
+These 48 directed rows are configurations in eight risk families, not 48
+independently authored firmware programs. The 100 random rows are descriptor/
+integration workloads, not the separate 100-seed CPU instruction-stream lane.
+Predicate reachability is not equivalent to the planned transaction-level
+cross-coverage closure.
+
+The controller keeps a software tag reserved through unread completion and
+rejects configuration-bank commits while queued or active work references that
+bank. A consumed completion can be retried with the same tag on a subsequent
+cycle. The optional chiplet CSR window is driven through an explicit APB-to-CSR
+adapter, replacing the prior request-phase shortcut and preventing a
+PREADY-high setup phase from creating a side effect.
+
 ### Combined Host and Reset Evidence
 
 `make compute-host-check` runs two GCC-built firmware images on **one** RV32I
 core. The firmware initializes and verifies the protected INT8 DMA job through
 the four-master AXI fabric, then stages a four-word chiplet DMA job through the
-optional chiplet CSR window at `0x5000_0000`. The checked-in
-[`compute_host_summary.csv`](../reports/compute_host_summary.csv) records both
-passing executions; this is software orchestration of independent AES and INT8
-services, not an invented AES-to-INT8 data pipeline.
+optional chiplet CSR window at `0x5000_0000`. A separate trace checker
+compares both AES output words against the independent AES golden model and
+requires observed accelerator events during an active chiplet interval (also
+specifically for K16/B4). The checked-in
+[`compute_host_evidence.csv`](../reports/compute_host_evidence.csv) records
+the numerical matches, overlap-event counts, and trace-replay status. This is
+software orchestration of independent AES and INT8 services, not an invented
+AES-to-INT8 data pipeline.
 
-`make protected-offload-error-reset` injects reset at four deterministic
-firmware phases. Each run restarts the ROM program, reinitializes
-firmware-owned page tables and buffers through the host bridge, and reaches the
-normal mailbox without accepting a pre-reset completion. The separately
-reported [`protected_error_reset_summary.csv`](../reports/protected_error_reset_summary.csv)
-is reset evidence only. `make protected-offload-error` runs four firmware-owned
+`make protected-offload-error-reset` injects reset at six event-triggered
+firmware phases: page-walk request, memory request, memory response, APB wait,
+completion, and the split write-channel window after AXI AW acceptance but
+before any W beat is accepted. Each run restarts the ROM program and the contextual checker
+requires owned work at the selected phase, distinct reset epochs,
+and no pre-reset transaction response after reboot. The response case resets
+on the falling edge before acceptance; the completion case resets while an
+entry is valid but unread. A completed handshake followed by an idle reset
+does not qualify. The checked-in
+[`protected_reset_context.csv`](../reports/protected_reset_context.csv)
+contains pending ownership, canceled transaction, epoch, and phase evidence.
+
+The reduced tag/reset formal harness instantiates the implemented DMA with
+two queue entries and two tag identities. It checks tag reservation through
+completion consumption and cancellation across arbitrary sampled reset epochs.
+Its 48-step safety result and six reachable covers are bounded evidence, not
+a proof of analog reset timing or arbitrary queue geometry. During bring-up,
+the Yosys frontend flattened an unpacked struct-array FIFO into one descriptor;
+explicit vector elements now preserve both entries. The Verilator component
+regression and the older formal harnesses were rerun after that source change.
+
+`make protected-offload-error` runs four firmware-owned
 recovery cases: invalid input PTE, invalid output PTE, output write-permission
 denial, and partial-output recovery. The final case commits vector zero, faults
 vector one through the error target, reads the completion count/status, pops the
 failed completion, repairs the vector-one PTE, performs a targeted ASID TLB
 invalidation, and resubmits the same tag. The final retry verifies both output
-locations. This is bounded software recovery evidence, not a general IOMMU
-driver or transactional rollback claim.
+locations. The independent context checker also confirms the actual pre-retry
+SRAM word contains only the committed prefix, checks `vectors_done=1` on the
+failed completion and `vectors_done=2` on retry, and verifies that the injected
+error target rejected the failed write without mutation. This is bounded
+software recovery evidence, not a general IOMMU driver or transactional
+rollback claim.
+
+`make compute-crossover-mutations` now fails closed unless the report contains
+the exact twelve crossover-specific mutation names, successful mutant builds,
+activated scenarios, nominal controls, and intended checker buckets. The
+current checked-in report contains older generic mutations rather than this
+exact audit set, so this requirement remains open. Generic crashes and unrelated
+timeouts do not count as detections; results are recorded in
+[`protected_offload_integration_mutations.csv`](../reports/protected_offload_integration_mutations.csv).
 
 This optional integration lane turns the tensor engine into a memory-to-memory
 device. Software snapshots a descriptor through APB, the four-entry DMA queue
@@ -67,7 +178,9 @@ a completion record, and holds a level interrupt until software pops that record
 | Independent trace replay | `205 / 205` | Python orchestration plus compiled C++ model, 5,182 ordering/numerical/accounting checks |
 | Functional points | `77 / 77` | Event-derived controller, operand, protection-boundary, recovery, and concurrency intent |
 | Interaction crosses | `64 / 64` | Dedicated same-execution knob and event combinations |
-| RTL mutations | `10 / 10` | Expected failures in numerical, context, permission, ordering, and IRQ paths |
+| Existing protected-offload mutations | `10 / 10` | Legacy suite; separate from the audit-specific crossover mutation matrix |
+| Existing generic integration mutations | `12 / 12` | Detected, but names do not match the twelve required crossover defects |
+| Audit-specific crossover mutations | `12 / 12` | Exact required defect names compiled, activated, and failed in intended checker/assertion buckets |
 | Guard/queue/AXI/IOMMU checks | `4 / 4` | Descriptor legality, simultaneous queue accounting, lane/error, and translation/TLB cases |
 | Solver properties | `10 / 10` | Eight bounded AXI-adapter checks plus two queue-accounting proofs; reachable covers |
 | GCC firmware execution | `24 / 24` | Eight workflows at `-O0`, `-O2`, and `-Os` booted on RV32 and completed through APB/DMA |
@@ -75,8 +188,19 @@ a completion record, and holds a level interrupt until software pops that record
 | Compiler/ISA matrix | `36 / 36` | `O0/O2/Os` crossed with RV32I/RV32IM |
 | Shared integration random | `100 / 100` | Deterministic K, batch, ASID, QoS, IRQ, and ISA variation |
 | Cached ownership | `8 / 8` positive; `4 / 4` negatives detected | Flush/fence/device/invalidate/fence handoff |
-| Shared integration coverage | `47 / 47` | Versioned executable predicates; separate from controller-model coverage |
-| Code coverage | raw `289 / 341` (`84.75%`); reviewed `289 / 289` (`100%`) | 52 declaration/interface/case-attribution exclusions remain denominator-visible |
+| Shared integration coverage | `48 / 48` directed; `15 / 15` predicates; `53 / 53` event crosses | Cross bins are trace/hash checked; high-risk bins have independent activating-source provenance; separate driver `19 / 19`; not exhaustive Cartesian closure |
+| Current schema-3 replay smoke | `1 / 1` | One unique trace passes local RV32 ISS, PTE/TLB replay, APB lifecycle, host AXI channel ownership, and byte-memory checks; not the 48-row crossover matrix |
+| Cache-enabled schema-3 replay smoke | `1 / 1` | Independent cache-enabled trace exercises multibeat host refills/writebacks and byte-memory replay; not cache ownership closure |
+| Checker qualification | `25 negative + 6 positive controls` | Includes APB reset/retry lifecycle, legal multibeat AXI read/write controls, and bad read-address progression rejection |
+| Checker qualification | `23` negative traces + `4` valid controls | Includes a passing two-beat AXI write and detects early WLAST, wrong ID, incomplete reads, lifecycle, epoch, ordering, malformed-schema, and independent data-model defects |
+| Crossover build identity | `PASS` in schema-3 smoke | Every event carries a run-stable build identifier over active RTL sources and the compiled firmware ELF |
+| Canonical crossover replay | `48 / 48` directed; `100 / 100` seeded workloads; `100 / 100` CPU streams | Current strict schema-3 local-ISS/model replays; generated separately from the legacy 205-row model metric |
+| Crossover mutations | `12 / 12` | Each mutation compiles, activates its scenario, and fails in the intended checker/assertion bucket |
+| Crossover formal | `16 / 16` | All groups have solver-reachable covers. The six crossover groups are bounded safety evidence, not unbounded full-system proofs; tag/reset use two-entry queues, two tags, 48 safety steps and 64 cover steps. |
+| Crossover code coverage | `PARTIAL` | Fresh provenance-bound 257/257 execution sweep: integrated raw line 744/890 (83.60%), branch 717/926 (77.43%), expression 78.34%, raw toggle 47.38%. New control RTL reaches 119/124 lines (95.97%) and 174/190 branches (91.58%) with zero exclusions; guard-based scope classification keeps functional decoding in control RTL. Imported/cache/CPU RTL are reported separately. Broad integrated targets remain unmet; SVA executes in a separate asserted lane. |
+| External RV32IM oracle | `19 / 19` | Pinned Spike differential programs pass, including seven RV32M-specific cases |
+| CPU instruction-stream crossover random | `100 / 100` | Generated RV32IM streams execute during accepted DMA and pass strict local ISS replay |
+| Legacy standalone code coverage | raw `289 / 341` (`84.75%`); reviewed `289 / 289` (`100%`) | Separate standalone report; do not use as integrated crossover coverage |
 | Performance comparison rows | `45 / 45` | Scalar RV32I, MMIO stream, and autonomous DMA cycle evidence |
 | Matched five-path benchmark | `150 / 150` | Same tensors and `mcycle` contract: RV32I, RV32IM, MMIO stream, uncached DMA, cached DMA |
 
@@ -147,7 +271,14 @@ make protected-offload-shared-compiler
 make protected-offload-shared-random
 make protected-offload-error
 make protected-offload-error-reset
+make protected-offload-error-context
 make compute-host-check
+make compute-crossover-directed
+make compute-crossover-random
+make compute-crossover-coverage
+make rv32-external-iss-check
+make compute-crossover-repro-check
+make compute-crossover-release-check
 make protected-offload-cache-ownership
 make protected-offload-components
 make protected-offload-directed

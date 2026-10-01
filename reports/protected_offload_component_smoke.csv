@@ -1,5 +1,8 @@
 component,status,checks,detail
+axi_response_delay,PASS,5,PROTECTED_AXI_SRAM|status=PASS|checks=5
 axi_lane_adapter,PASS,6,PROTECTED_AXI_ADAPTER_PASS|cases=6|lower_lane=1|upper_lane=1|errors=2|backpressure=1
-iommu_translation,FAIL,0,compile failure
-descriptor_queue,PASS,4,PROTECTED_QUEUE_PASS|simultaneous_push_pop=1|full_occupancy=4|backpressure=1|ordering=1
+iommu_translation,PASS,5,PROTECTED_IOMMU_PASS|cases=5|hits=1|misses=4|faults=1|invalidations=2
+descriptor_queue,PASS,4,PROTECTED_QUEUE_PASS|simultaneous_push_pop=1|full_occupancy=4|backpressure=1|ordering=1|active_tag_reuse_rejected=1
 descriptor_guard,PASS,10,PROTECTED_DESCRIPTOR_GUARD_PASS|checks=10|geometry=5|generation=1|overlap=1|overflow=2|valid=1
+machine_timer,PASS,3,PROTECTED_TIMER|status=PASS|setup_guard=1|irq=1|invalid=1
+irq_aggregator,PASS,6,PROTECTED_IRQ_AGGREGATOR|status=PASS|sources=3|set_dominant=1|masked_pending=1

@@ -2,7 +2,8 @@
 module tb_protected_tlb_control;
   logic clk=0,rst_n=0; always #5 clk=~clk;
   logic[7:0] paddr; logic psel,penable,pwrite; logic[31:0] pwdata,prdata;
-  logic pready,pslverr,translation_idle,service_busy,inv_valid,inv_all; logic[7:0] inv_asid;
+  logic pready,pslverr,translation_idle,service_busy,inv_valid,inv_all,block_submissions;
+  logic[2:0] submit_occupancy,completion_occupancy; logic[7:0] inv_asid;
   integer checks=0,failures=0;
   protected_tlb_control_apb dut(.*);
   task automatic write_control(input logic all,input logic[7:0] asid);
@@ -14,6 +15,7 @@ module tb_protected_tlb_control;
   endtask
   initial begin
     paddr=0;psel=0;penable=0;pwrite=0;pwdata=0;translation_idle=0;service_busy=1;
+    submit_occupancy=0;completion_occupancy=0;
     repeat(3)@(posedge clk);rst_n=1;
     write_control(0,8'h3a); checks++;
     if(!dut.pending||inv_valid||inv_all||inv_asid!=8'h3a)begin failures++;$display("TLBCTL_FAIL|held_request");end

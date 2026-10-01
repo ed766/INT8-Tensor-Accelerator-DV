@@ -21,6 +21,7 @@ module protected_offload_service #(
 
   input  logic [31:0] root_pt_addr,
   input  logic tlb_inv_valid,
+  input  logic block_submissions,
   input  logic tlb_inv_all,
   input  logic [7:0] tlb_inv_asid,
   output logic ptw_req_valid,
@@ -56,6 +57,12 @@ module protected_offload_service #(
   output logic busy,
   output logic [2:0] submit_occupancy,
   output logic [2:0] completion_occupancy,
+  output logic completion_published,
+  output logic [7:0] completion_publish_tag,
+  output logic [7:0] completion_publish_asid,
+  output logic [3:0] completion_publish_status,
+  output logic [2:0] completion_publish_fault_stage,
+  output logic [6:0] completion_publish_vectors_done,
   output logic [31:0] perf_tlb_hits,
   output logic [31:0] perf_tlb_misses,
   output logic [31:0] perf_walk_reads,
@@ -67,7 +74,14 @@ module protected_offload_service #(
   output logic [31:0] perf_accel_completed,
   output logic [31:0] perf_accel_input_chunks,
   output logic [31:0] perf_accel_output_stalls,
-  output logic [31:0] perf_accel_bank_swaps
+  output logic [31:0] perf_accel_bank_swaps,
+  output logic [QUEUE_DEPTH:0] owned_valid,
+  output logic [QUEUE_DEPTH:0][31:0] owned_start,
+  output logic [QUEUE_DEPTH:0][31:0] owned_end,
+  output logic [QUEUE_DEPTH:0][31:0] owned_input_start,
+  output logic [QUEUE_DEPTH:0][31:0] owned_input_end,
+  output logic [QUEUE_DEPTH:0][31:0] owned_output_start,
+  output logic [QUEUE_DEPTH:0][31:0] owned_output_end
 );
   logic submit_valid, submit_ready, submit_accepted, submit_rejected;
   logic [31:0] submit_input_iova, submit_output_iova;
@@ -96,6 +110,9 @@ module protected_offload_service #(
   logic [7:0] accel_in_tag, accel_out_tag;
   logic [31:0] perf_accepted, perf_completed, perf_input_chunks;
   logic [31:0] perf_output_stalls, perf_bank_swaps;
+  logic [1:0] bank_referenced;
+  logic accelerator_cfg_ready;
+  logic cfg_reject;
 
   assign last_translation_tlb_hit = tlb_hit;
   assign accel_command_error = cmd_error;
@@ -104,6 +121,8 @@ module protected_offload_service #(
   assign perf_accel_input_chunks = perf_input_chunks;
   assign perf_accel_output_stalls = perf_output_stalls;
   assign perf_accel_bank_swaps = perf_bank_swaps;
+  assign cfg_reject = bank_referenced[cfg_bank];
+  assign cfg_ready = accelerator_cfg_ready && !cfg_reject;
 
   protected_offload_apb_csr csr (
     .clk, .rst_n, .paddr(apb_addr), .psel(apb_sel), .penable(apb_enable),
@@ -139,7 +158,12 @@ module protected_offload_service #(
     .completion_ready, .completion_tag, .completion_status,
     .completion_asid, .completion_fault_iova, .completion_fault_stage,
     .completion_vectors_done, .irq, .busy, .submit_occupancy,
-    .completion_occupancy
+    .completion_published, .completion_publish_tag, .completion_publish_asid,
+    .completion_publish_status, .completion_publish_fault_stage,
+    .completion_publish_vectors_done,
+    .completion_occupancy, .bank_referenced, .block_submissions,
+    .owned_valid, .owned_start, .owned_end,
+    .owned_input_start, .owned_input_end, .owned_output_start, .owned_output_end
   );
 
   dma_iommu #(.TLB_ENTRIES(TLB_ENTRIES)) iommu (
@@ -157,7 +181,7 @@ module protected_offload_service #(
   );
 
   int8_tensor_accel accelerator (
-    .clk, .rst_n, .cfg_valid, .cfg_ready, .cfg_kind, .cfg_bank,
+    .clk, .rst_n, .cfg_valid(cfg_valid && !cfg_reject), .cfg_ready(accelerator_cfg_ready), .cfg_kind, .cfg_bank,
     .cfg_output, .cfg_index, .cfg_data, .cmd_valid(accel_cmd_valid),
     .cmd_ready(accel_cmd_ready), .cmd_bank(accel_cmd_bank),
     .cmd_k(accel_cmd_k), .cmd_tag(accel_cmd_tag), .cmd_error,
@@ -174,5 +198,7 @@ module protected_offload_service #(
     mem_req_valid |-> !$isunknown(mem_req_addr));
   a_invalidation_not_during_walk: assert property (@(posedge clk) disable iff (!rst_n)
     tlb_inv_valid |-> !ptw_req_valid);
+  a_referenced_generation_not_committed: assert property (@(posedge clk) disable iff (!rst_n)
+    cfg_valid |-> !bank_referenced[cfg_bank]);
 `endif
 endmodule

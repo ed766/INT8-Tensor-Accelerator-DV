@@ -1,0 +1,3 @@
+scenario,status,trace,rvfi_retirements,aes_outputs,aes_matches,chiplet_intervals,accelerator_events,overlap_events,first_failure
+combined_k4_b1,PASS,build/protected_offload/shared_firmware/combined_k4_b1/crossover.trace,2260,4,4,1,3,3,none
+combined_k16_b4,PASS,build/protected_offload/shared_firmware/combined_k16_b4/crossover.trace,2692,4,4,1,24,17,none

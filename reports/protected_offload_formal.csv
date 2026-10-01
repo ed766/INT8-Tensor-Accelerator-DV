@@ -1,11 +1,17 @@
-property,mode,depth,status,cover,runtime_s,detail
-request_response_accounting,bounded_solver_safety,16,PASS,REACHABLE,<5,response count never exceeds accepted count
-single_outstanding_bound,bounded_solver_safety,16,PASS,REACHABLE,<5,at most one DMA memory operation is active
-write_address_contract,bounded_solver_safety,16,PASS,REACHABLE,<5,AW is aligned and describes one 32-bit transfer
-byte_lane_mapping,bounded_solver_safety,16,PASS,REACHABLE,<5,32-bit writes select exactly one 64-bit data lane
-write_completion_order,bounded_solver_safety,16,PASS,REACHABLE,<5,DMA response follows accepted AW and W
-read_address_contract,bounded_solver_safety,16,PASS,REACHABLE,<5,AR is aligned and describes one 32-bit transfer
-read_completion_order,bounded_solver_safety,16,PASS,REACHABLE,<5,DMA response follows an accepted AR
-response_backpressure_stability,bounded_solver_safety,16,PASS,REACHABLE,<5,response payload remains stable while blocked
-queue_count_bounded,solver_combinational,1,PASS,REACHABLE,<5,simultaneous and single-sided updates remain within depth
-simultaneous_push_pop_preserves_count,solver_combinational,1,PASS,REACHABLE,<5,concurrent enqueue/dequeue has zero net occupancy change
+property,mode,depth,status,cover,runtime_s,detail,source_harness_sha256,cover_depth
+request_response_accounting,bmc_solver_safety,16,PASS,REACHABLE,NA,response count never exceeds accepted count; adapter covers 3/3,91283c383fed822372e479c66c05bc3bc97a3f0392fea3cd5fa6140feb8142e0,16
+single_outstanding_bound,bmc_solver_safety,16,PASS,REACHABLE,NA,at most one DMA memory operation is active; adapter covers 3/3,91283c383fed822372e479c66c05bc3bc97a3f0392fea3cd5fa6140feb8142e0,16
+write_address_contract,bmc_solver_safety,16,PASS,REACHABLE,NA,AW is aligned and describes one 32-bit transfer; adapter covers 3/3,91283c383fed822372e479c66c05bc3bc97a3f0392fea3cd5fa6140feb8142e0,16
+byte_lane_mapping,bmc_solver_safety,16,PASS,REACHABLE,NA,32-bit writes select exactly one 64-bit data lane; adapter covers 3/3,91283c383fed822372e479c66c05bc3bc97a3f0392fea3cd5fa6140feb8142e0,16
+write_completion_order,bmc_solver_safety,16,PASS,REACHABLE,NA,DMA response follows accepted AW and W; adapter covers 3/3,91283c383fed822372e479c66c05bc3bc97a3f0392fea3cd5fa6140feb8142e0,16
+read_address_contract,bmc_solver_safety,16,PASS,REACHABLE,NA,AR is aligned and describes one 32-bit transfer; adapter covers 3/3,91283c383fed822372e479c66c05bc3bc97a3f0392fea3cd5fa6140feb8142e0,16
+read_completion_order,bmc_solver_safety,16,PASS,REACHABLE,NA,DMA response follows an accepted AR; adapter covers 3/3,91283c383fed822372e479c66c05bc3bc97a3f0392fea3cd5fa6140feb8142e0,16
+response_backpressure_stability,bmc_solver_safety,16,PASS,REACHABLE,NA,response payload remains stable while blocked; adapter covers 3/3,91283c383fed822372e479c66c05bc3bc97a3f0392fea3cd5fa6140feb8142e0,16
+queue_count_bounded,prove_solver_safety,1,PASS,REACHABLE,NA,simultaneous and single-sided updates remain within depth; queue covers 1/1,91283c383fed822372e479c66c05bc3bc97a3f0392fea3cd5fa6140feb8142e0,1
+simultaneous_push_pop_preserves_count,prove_solver_safety,1,PASS,REACHABLE,NA,concurrent enqueue/dequeue has zero net occupancy change; queue covers 1/1,91283c383fed822372e479c66c05bc3bc97a3f0392fea3cd5fa6140feb8142e0,1
+tag_lifetime,bounded_solver_safety,48,PASS,REACHABLE,NA,"implemented DMA; two-entry queues and two tags; duplicate acceptance forbidden until completion consumption; legal one-cycle responders; safety depth 48, six shared covers within 64",91283c383fed822372e479c66c05bc3bc97a3f0392fea3cd5fa6140feb8142e0,64
+configuration_reference_lifetime,bounded_solver_safety,24,PASS,REACHABLE,NA,busy/queued work retains a bank reference,91283c383fed822372e479c66c05bc3bc97a3f0392fea3cd5fa6140feb8142e0,96
+completion_after_write_drain,bounded_solver_safety_plus_rtl_trace,32,PASS,REACHABLE,NA,actual SBY BMC proof plus all completion-drain cover goals 17/17 and a strict-replay committed-write witness,91283c383fed822372e479c66c05bc3bc97a3f0392fea3cd5fa6140feb8142e0,40
+invalidation_submission_arbitration,bounded_solver_safety,24,PASS,REACHABLE,NA,the real APB TLB-control RTL blocks DMA submits while invalidation is pending and pulses only after translation/service/queue drain,91283c383fed822372e479c66c05bc3bc97a3f0392fea3cd5fa6140feb8142e0,96
+irq_set_dominates_ack,bounded_solver_safety,24,PASS,REACHABLE,NA,simultaneous event and W1C acknowledgement retains the event,91283c383fed822372e479c66c05bc3bc97a3f0392fea3cd5fa6140feb8142e0,96
+reset_cancels_owned_work,bounded_solver_safety,48,PASS,REACHABLE,NA,"implemented DMA reset with arbitrary sampled reset epochs; all request/response ownership cleared; covers owned reset and subsequent fresh completion; safety depth 48, cover depth 64; analog reset timing not modeled",91283c383fed822372e479c66c05bc3bc97a3f0392fea3cd5fa6140feb8142e0,64

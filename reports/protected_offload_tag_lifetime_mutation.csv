@@ -1,0 +1,3 @@
+case,compile_status,status,activated,detection,detail
+nominal_control,PASS,PASS,control,nominal_component_test,nominal active-tag control
+allow_duplicate_live_tag,PASS,DETECTED,true,tag_lifetime_checker,active-tag checker marker observed

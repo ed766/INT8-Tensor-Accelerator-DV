@@ -68,8 +68,8 @@ module protected_dma_axi_adapter #(
   assign rready = state == READ_RESP;
   assign awid = AXI_ID;
   assign arid = AXI_ID;
-  assign awaddr = {address_q[31:3], 3'b000};
-  assign araddr = {address_q[31:3], 3'b000};
+  assign awaddr = {address_q[31:2], 2'b00};
+  assign araddr = {address_q[31:2], 2'b00};
   assign awlen = 8'd0;
   assign arlen = 8'd0;
   assign awsize = 3'd2;
@@ -140,9 +140,9 @@ module protected_dma_axi_adapter #(
     arvalid && !arready |=> !arvalid || $stable({arid,araddr,arlen,arsize,arburst,arprot,arqos}));
   a_single_beat_last: assert property (@(posedge clk) disable iff (!rst_n) wvalid |-> wlast);
   a_aligned_aw_address: assert property (@(posedge clk) disable iff (!rst_n)
-    awvalid |-> awaddr[2:0] == 0);
+    awvalid |-> awaddr[1:0] == 0);
   a_aligned_ar_address: assert property (@(posedge clk) disable iff (!rst_n)
-    arvalid |-> araddr[2:0] == 0);
+    arvalid |-> araddr[1:0] == 0);
   a_response_stable: assert property (@(posedge clk) disable iff (!rst_n)
     rsp_valid && !rsp_ready |=> !rsp_valid || $stable({rsp_rdata,rsp_error}));
 `endif
