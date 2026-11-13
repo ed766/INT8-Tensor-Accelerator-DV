@@ -55,7 +55,7 @@ jobs:
           echo "OSS_CAD_SUITE=${root}" >> "${GITHUB_ENV}"
       - name: Run accelerator release checks
         if: matrix.lane == 'accelerator'
-        run: make release-check
+        run: make accelerator-release-check
       - name: Verify pinned chiplet sources
         if: matrix.lane == 'protected-offload'
         run: python3 integration/protected_offload/scripts/check_provenance.py --authoritative-source ../ucie_chiplet_soc

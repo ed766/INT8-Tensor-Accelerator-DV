@@ -285,7 +285,12 @@ docs-check:
 
 project-check: model-selftest linear-demo vectors mlp-demo lint regress streaming-check protocol-edges portable-check axi-integration-check coverage performance-report
 
-release-check: project-check fx-compiler-check mutation-check formal-check code-coverage synth-check
+.PHONY: accelerator-release-check
+accelerator-release-check: project-check fx-compiler-check mutation-check formal-check code-coverage synth-check
+	$(PYTHON) scripts/check_docs.py
+	git diff --check
+
+release-check: accelerator-release-check
 	$(PYTHON) scripts/generate_metrics.py
 	$(PYTHON) scripts/check_docs.py
 	git diff --check
