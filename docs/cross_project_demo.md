@@ -1,5 +1,9 @@
 # Cross-project INT8 demo
 
+Download [trace_replay.html](trace_replay.html) and open it in a browser for the
+fault and retry replay. Regenerate it after running the demo with
+`python3 integration/protected_offload/scripts/export_mlp_replay.py`.
+
 Run `make cross-project-demo` with Verilator, RV32-capable GCC/binutils,
 and PyTorch installed. The demo uses the RV32IM core from the Chiplet SoC,
 the L1 data cache, the AXI QoS fabric and IOMMU, and the INT8 accelerator.

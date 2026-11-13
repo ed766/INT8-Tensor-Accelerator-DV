@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>INT8 SoC Trace Replay</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1219;--panel:#111d27;--line:#2b3d4b;--text:#e9f3f6;--muted:#a4bac6;--mint:#70f5c5;--amber:#ffbd78;--red:#ff8991}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px system-ui,sans-serif}main{max-width:1120px;margin:auto;padding:42px 24px 60px}h1{font-size:clamp(2rem,6vw,4.2rem);letter-spacing:-.055em;line-height:1;margin:.2em 0}h2{font-size:1rem;margin:0 0 14px}p{color:var(--muted);line-height:1.55}header p{max-width:720px}.label,output,code,.word{font:13px ui-monospace,monospace}.label{color:var(--mint);text-transform:uppercase;letter-spacing:.12em}button{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:7px;padding:9px 13px;cursor:pointer;font:inherit}button[aria-pressed=true]{border-color:var(--mint);color:var(--mint)}button:hover{background:#20323e}:focus-visible{outline:2px solid var(--mint);outline-offset:3px}.tabs,.controls,.stages{display:flex;gap:8px;flex-wrap:wrap}.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-top:14px}.stages span{padding:7px 10px;border:1px solid var(--line);border-radius:5px;color:var(--muted)}.stages .active{color:var(--mint);border-color:var(--mint)}input[type=range]{width:100%;accent-color:var(--mint);margin:14px 0}.controls{align-items:center;justify-content:space-between}.words{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:7px}.word{padding:8px;border:1px solid var(--line);border-radius:5px;color:var(--muted)}.word b{display:block;margin-bottom:3px}.word.ok{color:var(--mint)}.word.err{color:var(--red);border-color:var(--red)}.word.pending{color:var(--amber)}.split{display:grid;grid-template-columns:1.2fr 1fr;gap:14px}#events{max-height:235px;overflow:auto;display:grid;gap:5px}#events button{text-align:left;font:12px ui-monospace,monospace}pre{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--muted);margin:0;font-size:12px}.timeline{display:grid;grid-template-columns:90px 1fr;gap:7px;align-items:center;margin:14px 0}.track{position:relative;height:14px;background:#0b1219;border-radius:4px}.track i{position:absolute;width:2px;height:100%;background:var(--mint);pointer-events:none}.track .cursor{width:2px;background:white}.plot{display:grid;gap:8px}.metric{display:grid;grid-template-columns:minmax(115px,1fr) 2fr minmax(65px,.45fr);align-items:center;gap:8px;font-size:13px}.bar{height:9px;background:#2a4050;border-radius:8px}.bar i{display:block;height:100%;border-radius:8px;background:var(--mint)}small{color:var(--muted)}@media(max-width:650px){main{padding:24px 14px}.split{grid-template-columns:1fr}}
+</style>
+<main>
+<header><div class="label">RTL simulation · protected INT8 offload</div><h1>One inference through a SoC</h1><p>Follow a two-layer INT8 inference across the cache, AXI fabric, DMA, and accelerator. Start at the failed output write, then step into the firmware retry.</p></header>
+<nav id="modes" class="tabs" aria-label="Recorded runs"></nav>
+<section class="panel"><div class="stages" id="stages"></div><p id="scene" aria-live="polite"></p><div id="jumps" class="tabs"></div><div id="timeline" class="timeline" aria-hidden="true"></div><input id="scrub" type="range" aria-label="Simulation cycle"><div class="controls"><button id="play">Play</button><output id="clock" for="scrub"></output></div></section>
+<section class="panel"><h2>Layer 2 output buffer</h2><div id="words" class="words"></div><p><small>Values are reconstructed from committed DMA responses. Amber marks the initialized guard value, red marks a rejected write, and green marks a committed word.</small></p></section>
+<div class="split"><section class="panel"><h2>Trace events near this cycle</h2><div id="events"></div></section><section class="panel"><h2>Selected event</h2><pre id="detail"></pre></section></div>
+<section class="panel"><h2>QoS comparison · longest observed DMA read-address wait</h2><div id="plot" class="plot"></div><p><small>One deterministic RTL simulation per mode. The wait is measured in cycles at the DMA AXI read-address interface.</small></p></section>
+<section class="panel"><h2>Source trace</h2><pre id="source"></pre></section>
+</main>
+<script id="data" type="application/json">/* TRACE_DATA */</script>
+<script>
+const data = JSON.parse(document.getElementById('data').textContent);
+const get = id => document.getElementById(id);
+const labels = {fault_retry:'Fault & retry',idle:'Idle fabric',equal_qos:'Equal QoS',peer_high_qos:'Contender QoS 15',dma_high_qos:'DMA QoS 15'};
+const stages = ['RV32IM','L1 cache','AXI fabric','Shared SRAM','INT8 DMA'];
+const base = 0x1000601c;
+let mode, run, selected, timer;
+const button = (label, action) => {
+  const element = document.createElement('button');
+  element.textContent = label;
+  element.onclick = action;
+  return element;
+};
+const fault = events => events.find(e => e.kind === 'MEM_RSP' && e.error === '1');
+const retries = events => events.filter(e => e.kind === 'SUBMIT' && e.tag === '98');
+function stop() {
+  clearInterval(timer);
+  timer = undefined;
+  get('play').textContent = 'Play';
+}
+function seek(cycle, event) {
+  get('scrub').value = cycle;
+  selected = event;
+  render();
+}
+function choose(name) {
+  stop();
+  mode = name;
+  run = data.runs[name];
+  for (const b of get('modes').children) b.setAttribute('aria-pressed', b.textContent === labels[name]);
+  const {events} = run;
+  get('scrub').min = events[0].cycle;
+  get('scrub').max = events.at(-1).cycle;
+  const clean = events.find(e => e.kind === 'MAINT_START');
+  const last = events.filter(e => e.kind === 'COMPLETE_PUBLISH').at(-1);
+  const jumps = [['Clean cache',clean],['Write fault',fault(events)],['Retry starts',retries(events)[1]],['Layer 2 completes',last]];
+  get('jumps').replaceChildren(...jumps.filter(([,e]) => e).map(([label,e]) => button(label, () => seek(e.cycle,e))));
+  get('source').textContent = name + '/crossover.trace\nSHA-256 ' + run.sha;
+  const min = events[0].cycle, span = events.at(-1).cycle - min;
+  const lanes = [
+    ['Cache', e => e.kind.startsWith('MAINT')],
+    ['Contender', e => e.kind === 'AXI_AR' && e.addr === '1000f000'],
+    ['DMA writes', e => e.kind === 'MEM_RSP'],
+    ['Descriptors', e => ['SUBMIT','COMPLETE_PUBLISH'].includes(e.kind)],
+  ];
+  get('timeline').replaceChildren(...lanes.flatMap(([label, filter]) => {
+    const title = document.createElement('small'), track = document.createElement('div');
+    title.textContent = label;
+    track.className = 'track';
+    track.onclick = event => seek(Math.round(min + span * event.offsetX / track.clientWidth));
+    for (const e of events.filter(filter)) {
+      const mark = document.createElement('i');
+      mark.style.left = (100 * (e.cycle - min) / span) + '%';
+      if (e.error === '1') mark.style.background = 'var(--red)';
+      track.append(mark);
+    }
+    const cursor = document.createElement('i');
+    cursor.className = 'cursor';
+    track.append(cursor);
+    return [title, track];
+  }));
+  const first = fault(events) || clean || events[0];
+  seek(first.cycle, first);
+}
+function render() {
+  const cycle = Number(get('scrub').value);
+  const events = run.events;
+  const index = events.findLastIndex(e => e.cycle <= cycle);
+  const current = selected || events[index];
+  const failure = fault(events);
+  const retry = retries(events)[1];
+  const done = events.filter(e => e.kind === 'COMPLETE_PUBLISH').at(-1);
+  const slider = get('scrub');
+  for (const cursor of get('timeline').querySelectorAll('.cursor'))
+    cursor.style.left = (100 * (cycle - +slider.min) / (+slider.max - +slider.min)) + '%';
+  get('clock').textContent = 'Cycle ' + cycle.toLocaleString();
+  get('scene').textContent = failure && cycle >= failure.cycle && cycle < retry.cycle
+    ? 'The third output write failed. Two words committed; the remaining words retain their guard values.'
+    : retry && cycle >= retry.cycle && cycle < done.cycle
+      ? 'Firmware resubmitted the descriptor. Successful DMA responses replace the guard words.'
+      : cycle >= done.cycle ? 'Layer 2 published a successful completion.'
+      : 'Cache maintenance and descriptor execution are in progress.';
+  const active = current.kind.startsWith('MAINT') ? [0,1] : current.kind === 'AXI_AR' ? [2,3]
+    : current.kind === 'MEM_RSP' ? [2,3,4] : [0,4];
+  get('stages').replaceChildren(...stages.map((label,i) => {
+    const span = document.createElement('span');
+    span.textContent = label;
+    if (active.includes(i)) span.className = 'active';
+    return span;
+  }));
+  const words = new Map();
+  for (const e of events.slice(0,index+1)) {
+    const addr = Number.parseInt(e.addr,16);
+    if (e.kind === 'MEM_RSP' && addr >= base && addr < base+64)
+      words.set(addr,e);
+  }
+  get('words').replaceChildren(...Array.from({length:16},(_,i) => {
+    const addr = base+4*i, e = words.get(addr), cell = document.createElement('div');
+    cell.className = 'word ' + (!e ? 'pending' : e.committed === '1' ? 'ok' : 'err');
+    const heading = document.createElement('b');
+    heading.textContent = '#' + (i+1) + (e?.error === '1' ? ' · fault' : '');
+    cell.append(heading, e?.committed === '1' ? e.wdata : 'a53c79e1');
+    cell.title = '0x' + addr.toString(16);
+    return cell;
+  }));
+  get('detail').textContent = Object.entries(current).map(([key,value]) => key + '  ' + value).join('\n');
+  get('events').replaceChildren(...events.slice(Math.max(0,index-4),index+5).map(e => {
+    const item = button(e.cycle + ' · ' + e.kind + ' · #' + e.eid, () => seek(e.cycle,e));
+    item.setAttribute('aria-pressed',e === current);
+    return item;
+  }));
+}
+get('scrub').oninput = () => { stop(); selected = undefined; render(); };
+get('play').onclick = () => {
+  if (timer) return stop();
+  const slider = get('scrub');
+  if (+slider.value >= +slider.max) seek(+slider.min);
+  get('play').textContent = 'Pause';
+  timer = setInterval(() => {
+    seek(Math.min(+slider.max,+slider.value+8));
+    if (+slider.value >= +slider.max) stop();
+  },40);
+};
+get('modes').replaceChildren(...Object.entries(labels).map(([key,label]) => button(label,() => choose(key))));
+for (const row of data.metrics.filter(row => row.mode in labels)) {
+  const item = document.createElement('div');
+  item.className = 'metric';
+  const bar = document.createElement('div'), fill = document.createElement('i');
+  bar.className = 'bar';
+  fill.style.width = (100 * +row.dma_max_ar_wait / Math.max(1,...data.metrics.map(r => +r.dma_max_ar_wait))) + '%';
+  bar.append(fill);
+  item.append(button(labels[row.mode],() => choose(row.mode)),bar,row.dma_max_ar_wait + ' cycles · ' + Number(row.cycles).toLocaleString() + ' total');
+  get('plot').append(item);
+}
+choose('fault_retry');
+</script>
+</html>
