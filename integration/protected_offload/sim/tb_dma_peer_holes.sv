@@ -22,6 +22,7 @@ module tb_dma_peer_holes;
   logic [31:0] completion_fault_iova;logic [2:0] completion_fault_stage,completion_publish_fault_stage,submit_occupancy,completion_occupancy;
   logic [6:0] completion_vectors_done,completion_publish_vectors_done;
   int writes=0;int seed=1;int jobs=0;int checks=0;
+  bit fault_mode;
   protected_offload_dma dut(.*);
   task automatic stall(input int phase);
     int delay;
@@ -47,34 +48,44 @@ module tb_dma_peer_holes;
     xlate_rsp_valid=1;xlate_rsp_paddr=(write_access?32'h10004000:32'h10001000)+32'(vector_number*4);
     @(negedge clk);xlate_rsp_valid=0;
   endtask
-  task automatic memory_access(input logic write_access,input int vector_number);
+  task automatic memory_access(input logic write_access,input int vector_number, input bit fail_response);
     wait(mem_req_valid);stall(write_access?6:1);
     if(mem_req_addr!=(write_access?32'h10004000:32'h10001000)+32'(vector_number*4)||mem_req_qos!=8)$fatal(1,"memory address/QoS");
     if(write_access)begin
-      if(mem_req_wdata!=accel_out_data||mem_req_wstrb!=4'hf)$fatal(1,"output payload");writes++;
+      if(mem_req_wdata!=accel_out_data||mem_req_wstrb!=4'hf)$fatal(1,"output payload");if (!fail_response) writes++;
     end
-    mem_req_ready=1;@(negedge clk);mem_req_ready=0;mem_rsp_valid=1;
-    @(negedge clk);mem_rsp_valid=0;
+    mem_req_ready=1;@(negedge clk);mem_req_ready=0;
+    if (fault_mode) begin
+      repeat (3) begin
+        @(negedge clk);
+        if (!mem_rsp_ready || mem_req_valid || completion_valid || !busy)
+          $fatal(1,"memory response wait");
+      end
+    end
+    mem_rsp_error=fail_response;mem_rsp_valid=1;
+    @(negedge clk);mem_rsp_valid=0;mem_rsp_error=0;
   endtask
-  task automatic job(input int error_vector,input int batch_size);
+  task automatic job(input int error_vector,input int batch_size, input int fault_stage = 5);
     int before_writes;
     before_writes=writes;jobs++;
     @(negedge clk);submit_tag=8'(jobs);submit_batch=7'(batch_size);submit_valid=1;
     if(!submit_ready)$fatal(1,"submit not ready");
     @(negedge clk);submit_valid=0;if(!submit_accepted)$fatal(1,"submit not accepted");
     for(int v=0;v<batch_size;v++)begin
-      translate(0,v);memory_access(0,v);
+      translate(0,v);memory_access(0,v,v==error_vector && fault_stage==2);
+      if(v==error_vector && fault_stage==2)break;
       wait(accel_cmd_valid);stall(2);accel_cmd_ready=1;@(negedge clk);accel_cmd_ready=0;
       wait(accel_in_valid);stall(3);accel_in_ready=1;@(negedge clk);accel_in_ready=0;
-      stall(4);accel_out_tag=submit_tag^((v==error_vector)?8'h1:8'h0);accel_out_valid=1;
+      stall(4);accel_out_tag=submit_tag^((v==error_vector && fault_stage==5)?8'h1:8'h0);accel_out_valid=1;
       @(negedge clk);accel_out_valid=0;
+      if(v==error_vector && fault_stage==5)break;
+      translate(1,v);memory_access(1,v,v==error_vector && fault_stage==4);
       if(v==error_vector)break;
-      translate(1,v);memory_access(1,v);
     end
     wait(completion_valid);#1;
-    if(completion_tag!=submit_tag||completion_asid!=1||completion_status!=(error_vector>=0?6:0)||completion_vectors_done!=7'(error_vector>=0?error_vector:batch_size))$fatal(1,"completion metadata");
+    if(completion_tag!=submit_tag||completion_asid!=1||completion_status!=(error_vector<0?4'd0:fault_stage==2?4'd4:fault_stage==4?4'd5:4'd6)||completion_vectors_done!=7'(error_vector>=0?error_vector:batch_size))$fatal(1,"completion metadata");
     if(writes-before_writes!=(error_vector>=0?error_vector:batch_size))$fatal(1,"wrong-tag committed prefix");
-    if(error_vector>=0&&(completion_fault_stage!=5||completion_fault_iova!=submit_output_iova+32'(error_vector*4)))$fatal(1,"wrong-tag fault metadata");
+    if(error_vector>=0&&(completion_fault_stage!=3'(fault_stage)||completion_fault_iova!=(fault_stage==2?submit_input_iova:submit_output_iova)+32'(error_vector*4)))$fatal(1,"wrong-tag fault metadata");
     repeat(3)begin @(negedge clk);if(!completion_valid||!irq||completion_tag!=submit_tag)$fatal(1,"completion hold");end
     completion_ready=1;@(negedge clk);completion_ready=0;
     if(completion_valid||irq)$fatal(1,"duplicate completion");
@@ -83,10 +94,20 @@ module tb_dma_peer_holes;
   initial begin
     if($value$plusargs("SEED=%d",seed))begin end
     repeat(3)@(negedge clk);rst_n=1;
+    fault_mode=$test$plusargs("MEMORY_FAULTS");
+    if (fault_mode) begin
+      job(1,3,2);
+      job(1,3,4);
+      job(-1,3);
+      if (writes!=5) $fatal(1,"memory fault committed prefix");
+      $display("DMA_MEMORY_FAULTS_PASS");
+      $finish;
+    end else begin
     for(int i=0;i<16;i++)job(i%4==3?0:-1,1);
     job(1,3);job(2,3);job(-1,3);
     if(writes!=18)$fatal(1,"final committed write count");
     $display("DMA_PEER_HOLES_PASS|jobs=%0d|wrong_tag_cases=6|successful_writes=%0d|hold_checks=%0d",jobs,writes,checks);$finish;
+    end
   end
   initial begin repeat(10000)@(posedge clk);$fatal(1,"DMA peer timeout");end
 endmodule

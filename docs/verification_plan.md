@@ -23,3 +23,22 @@
 | Protected-offload solver evidence | Actual DMA-to-AXI adapter and queue-count leaf | SymbiYosys/Boolector | Eight bounded adapter properties plus two queue proofs and reachable covers | `protected_offload_formal.csv` |
 
 Functional and cross coverage are project-defined and derived from workloads that execute against RTL. Code coverage and formal results are reported independently.
+
+
+## Additional release checks
+
+- `make formal-4x4-check` runs depth-24 bounded safety and six reachability
+  covers on the default 4×4, MAX_K=64, four-entry FIFO configuration.
+  An independent command/chunk/tag scoreboard checks FIFO order, accounting,
+  illegal commands, active-bank configuration backpressure and reset flushing.
+  The generated formal input substitutes arbitrary result payloads at the
+  FIFO write boundary. This permits arbitrary data in the stalled-output
+  stability check. Numerical correctness remains covered by the PyTorch
+  comparison. Completion progress depends on input and output handshakes.
+- `make protected-dma-stall-fault-check` independently stalls translation,
+  memory, and accelerator peers. Each seed must hit six targeted native DMA
+  wait branches and check precise completion metadata after middle-vector
+  read and write errors, the committed prefix, and subsequent recovery.
+  The early-completion mutation must fail the memory request hold check.
+  Native coverage from this bench is component evidence. The integrated
+  firmware coverage report uses its own workload and denominator.

@@ -5,77 +5,91 @@ on:
   pull_request:
 
 jobs:
-  release-evidence:
+  verification:
+    name: ${{ matrix.lane }}
+    strategy:
+      fail-fast: false
+      matrix:
+        lane: [accelerator, protected-offload]
     runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: int8_tensor_accelerator_dv
-    env:
-      CHIPLET_ROOT: ${{ github.workspace }}/ucie_chiplet_soc
     steps:
       - uses: actions/checkout@v7
         with:
           path: int8_tensor_accelerator_dv
       - uses: actions/checkout@v7
+        if: matrix.lane == 'protected-offload'
         with:
           repository: ed766/ucie_chiplet_soc
           path: ucie_chiplet_soc
-          # Keep external ACT4/Spike tooling reproducible. Update this ref
-          # together with the corresponding external-oracle lock/evidence.
-          ref: 4d1f1639947822e0260ecdab50d3b9bca969d01f
+          ref: f58886a9b6f14d34c6f3398cb69937e8abe0c3c5
       - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
-      - name: Cache pinned OSS CAD Suite
-        uses: actions/cache@v6
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator yosys make g++ gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
+          python -m pip install numpy -r requirements-verification.txt
+          python -m pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cpu
+      - uses: actions/cache@v6
+        if: matrix.lane == 'accelerator'
         with:
           path: ${{ runner.tool_cache }}/oss-cad-suite-2026-07-01
           key: oss-cad-suite-linux-x64-2026-07-01
-      - name: Install open-source tools
+      - name: Install pinned formal suite
+        if: matrix.lane == 'accelerator'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y verilator yosys make g++ gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf libboost-all-dev libgmp-dev libmpfr-dev libmpc-dev zlib1g-dev libssl-dev libffi-dev
-          python -m pip install numpy
-          python -m pip install -r requirements-verification.txt
-          python -m pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cpu
           root="${RUNNER_TOOL_CACHE}/oss-cad-suite-2026-07-01"
           if [[ ! -x "${root}/bin/sby" ]]; then
             archive="${RUNNER_TEMP}/oss-cad-suite.tgz"
-            curl -L --retry 3 -o "${archive}" https://github.com/YosysHQ/oss-cad-suite-build/releases/download/2026-07-01/oss-cad-suite-linux-x64-20260701.tgz
+            curl -fL --retry 3 -o "${archive}" https://github.com/YosysHQ/oss-cad-suite-build/releases/download/2026-07-01/oss-cad-suite-linux-x64-20260701.tgz
             echo "bc9799358a843e854f60ebbee1834573a9f7db9c1dcbed3ea7a32a36520612dc  ${archive}" | sha256sum -c -
             mkdir -p "${root}"
             tar -xzf "${archive}" --strip-components=1 -C "${root}"
           fi
+          "${root}/bin/tabbypy3" -m pip install --disable-pip-version-check click==8.1.8
+          "${root}/bin/sby" --version
           echo "OSS_CAD_SUITE=${root}" >> "${GITHUB_ENV}"
-      - name: Run complete evidence gate
+      - name: Run accelerator release checks
+        if: matrix.lane == 'accelerator'
         run: make release-check
-      - name: Verify pinned chiplet oracle source
+      - name: Verify pinned chiplet sources
+        if: matrix.lane == 'protected-offload'
+        run: python3 integration/protected_offload/scripts/check_provenance.py --authoritative-source ../ucie_chiplet_soc
+      - name: Install Spike and ACT4 build dependencies
+        if: matrix.lane == 'protected-offload'
         run: |
-          test "$(git -C ../ucie_chiplet_soc rev-parse HEAD)" = 4d1f1639947822e0260ecdab50d3b9bca969d01f
-          python3 - <<'PY'
-          from pathlib import Path
-          root = Path('../ucie_chiplet_soc/chiplet_extension')
-          for script in ('run_act4.py', 'run_external_iss.py'):
-              if '"--isa"' not in (root / 'scripts' / script).read_text():
-                  raise SystemExit(f'Pinned chiplet revision lacks RV32IM oracle support in {script}; refresh both checkout and verification pins to the tested source commit')
-          if not (root / 'verification/act4/ucie-chiplet-rv32im.yaml').is_file():
-              raise SystemExit('Pinned chiplet revision lacks ACT4 RV32IM configuration; source pin refresh required')
-          PY
-      - name: Install pinned RV32 external oracles
-        run: make -C ../ucie_chiplet_soc/chiplet_extension rv32-external-tools-install
+          sudo apt-get install -y autoconf automake device-tree-compiler libexpat1-dev libtool             libboost-program-options-dev libboost-regex-dev libboost-system-dev libgmp-dev             libmpfr-dev libmpc-dev zlib1g-dev libssl-dev libffi-dev libyaml-dev
+          df -h .
+      - uses: actions/cache@v6
+        if: matrix.lane == 'protected-offload'
+        with:
+          path: ucie_chiplet_soc/chiplet_extension/build/external_riscv_tools
+          key: int8-rv32-${{ runner.os }}-${{ hashFiles('ucie_chiplet_soc/chiplet_extension/verification/external_riscv_tools.lock.json') }}
+      - name: Install and verify pinned external tools
+        if: matrix.lane == 'protected-offload'
+        run: |
+          make -C ../ucie_chiplet_soc/chiplet_extension rv32-external-tools-install
+          source ../ucie_chiplet_soc/chiplet_extension/build/external_riscv_tools/environment.sh
+          python3 ../ucie_chiplet_soc/chiplet_extension/scripts/check_external_riscv_tools.py --require
       - name: Require RV32IM Spike and ACT4/Sail execution
+        if: matrix.lane == 'protected-offload'
         run: |
           source ../ucie_chiplet_soc/chiplet_extension/build/external_riscv_tools/environment.sh
           python3 ../ucie_chiplet_soc/chiplet_extension/scripts/run_external_iss.py --require --isa rv32im_zicsr
           python3 ../ucie_chiplet_soc/chiplet_extension/scripts/run_act4.py --isa rv32im --require --report ../ucie_chiplet_soc/chiplet_extension/reports/rv32_act_m_summary.csv
-      - name: Run protected-offload evidence gate
+      - name: Run protected-offload release checks
+        if: matrix.lane == 'protected-offload'
         run: make protected-offload-release-check
       - name: Require reproducible reports
         run: git diff --exit-code
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: int8-accelerator-evidence
+          name: int8-${{ matrix.lane }}-evidence
           path: |
             int8_tensor_accelerator_dv/reports/
-            int8_tensor_accelerator_dv/build/formal.log
+            int8_tensor_accelerator_dv/build/formal*.log

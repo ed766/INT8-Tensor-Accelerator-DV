@@ -241,7 +241,7 @@ protected-offload-report:
 	$(PYTHON) scripts/generate_metrics.py
 	$(PYTHON) scripts/check_docs.py
 
-protected-offload-release-check: protected-offload-provenance protected-offload-service-check protected-offload-shared-matrix protected-offload-cache-ownership protected-offload-shared-compiler protected-offload-shared-random protected-offload-error-context compute-host-check protected-offload-smoke protected-offload-components protected-offload-firmware protected-offload-coverage protected-offload-code-coverage protected-offload-formal compute-crossover-release-check protected-offload-performance protected-offload-matched-performance protected-offload-report
+protected-offload-release-check: protected-dma-stall-fault-check protected-offload-provenance protected-offload-service-check protected-offload-shared-matrix protected-offload-cache-ownership protected-offload-shared-compiler protected-offload-shared-random protected-offload-error-context compute-host-check protected-offload-smoke protected-offload-components protected-offload-firmware protected-offload-coverage protected-offload-code-coverage protected-offload-formal compute-crossover-release-check protected-offload-performance protected-offload-matched-performance protected-offload-report
 	git diff --check
 
 regress: vectors
@@ -264,6 +264,15 @@ mutation-check: vectors
 
 formal-check:
 	$(PYTHON) scripts/run_formal.py
+	$(MAKE) formal-4x4-check
+
+.PHONY: formal-4x4-check protected-dma-stall-fault-check
+formal-4x4-check:
+	$(PYTHON) scripts/run_formal_4x4.py
+
+protected-dma-stall-fault-check:
+	$(PYTHON) integration/protected_offload/scripts/run_dma_stall_faults.py
+
 
 performance-report: regress
 	$(PYTHON) scripts/generate_performance.py
