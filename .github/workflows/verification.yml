@@ -83,11 +83,17 @@ jobs:
           python3 ../ucie_chiplet_soc/chiplet_extension/scripts/run_act4.py --isa rv32im --require --report ../ucie_chiplet_soc/chiplet_extension/reports/rv32_act_m_summary.csv
       - name: Run cross-project INT8 demo
         if: matrix.lane == 'protected-offload'
-        run: make cross-project-demo
+        run: |
+          make cross-project-demo
+          demo=build/protected_offload/mlp_demo
+          sha256sum "$demo/summary.csv" > "$RUNNER_TEMP/mlp-demo.sha256"
+          make cross-project-demo
+          sha256sum -c "$RUNNER_TEMP/mlp-demo.sha256"
       - name: Run protected-offload release checks
         if: matrix.lane == 'protected-offload'
         run: make protected-offload-release-check
-      - name: Require reproducible reports
+      - name: Require reproducible standalone reports
+        if: matrix.lane == 'accelerator'
         run: git diff --exit-code
       - uses: actions/upload-artifact@v7
         if: always()
