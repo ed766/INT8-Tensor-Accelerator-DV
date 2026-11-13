@@ -37,7 +37,7 @@ int main(int argc, char** argv) {
 """)
         with (build / "compile.log").open("w") as log:
             subprocess.run(
-                ["verilator", "--cc", "--exe", "--build", "--timing", "--assert", "--coverage", "-Wno-fatal",
+                ["verilator", "--cc", "--exe", "--build", "--timing", "--assert", "--coverage", "-DSYNTHESIS", "-Wno-fatal",
                  "--top-module", TOP, "--Mdir", str(build), *defines,
                  str(BASE / "rtl/protected_queue_count_next.sv"),
                  str(BASE / "rtl/protected_offload_dma.sv"), str(BASE / f"sim/{TOP}.sv"), str(harness)],

@@ -372,3 +372,7 @@ compute-live-m-check:
 	python3 integration/protected_offload/scripts/check_provenance.py
 	python3 -m unittest discover -s integration/protected_offload/scripts -p test_live_m_interactions.py
 	python3 integration/protected_offload/scripts/run_live_m_interactions.py
+
+.PHONY: cross-project-demo
+cross-project-demo: protected-offload-provenance
+	$(PYTHON) integration/protected_offload/scripts/run_mlp_demo.py

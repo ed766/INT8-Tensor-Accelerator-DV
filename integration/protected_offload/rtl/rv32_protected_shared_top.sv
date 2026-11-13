@@ -334,7 +334,57 @@ module rv32_protected_shared_top #(
   end else begin:cached_host
    logic[31:0]cache_rdata;logic cache_ready_apb,cache_error_apb;
    protected_apb_cache_bridge cb(.clk,.rst_n,.psel(cache_data_sel),.penable,.pwrite,.paddr,.pwdata,.prdata(cache_rdata),.pready(cache_ready_apb),.pslverr(cache_error_apb),.cpu_req_valid(cache_req_valid),.cpu_req_ready(cache_req_ready),.cpu_req_addr(cache_req_addr),.cpu_req_write(cache_req_write),.cpu_req_wdata(cache_req_wdata),.cpu_req_wstrb(cache_req_wstrb),.cpu_req_size(cache_req_size),.cpu_req_id(cache_req_id),.cpu_rsp_valid(cache_rsp_valid),.cpu_rsp_ready(cache_rsp_ready),.cpu_rsp_rdata(cache_rsp_rdata),.cpu_rsp_error(cache_rsp_error));
+`ifdef TEST_MLP_DEMO
+   wire direct_arvalid;
+   wire [$bits(s_arid[3])-1:0] direct_arid;
+   wire [31:0] direct_araddr;
+   wire [7:0] direct_arlen;
+   wire [2:0] direct_arsize, direct_arprot;
+   wire [1:0] direct_arburst;
+   wire [3:0] direct_arqos;
+   logic demo_contend;
+   int demo_qos;
+   initial begin
+     demo_contend = $test$plusargs("MLP_CONTEND");
+     if (!$value$plusargs("MLP_QOS=%d", demo_qos)) demo_qos = 15;
+   end
+   // The workload makes no uncached loads during descriptor ownership.
+   // One outstanding contender burst keeps its ID live through RLAST.
+   logic contender_outstanding;
+   logic contender_valid;
+   wire contender_selected = contender_valid;
+   assign s_arvalid[3] = contender_selected ? 1'b1 : direct_arvalid;
+   assign s_arid[3] = contender_selected ? '0 : direct_arid;
+   assign s_araddr[3] = contender_selected ? 32'h1000_f000 : direct_araddr;
+   assign s_arlen[3] = contender_selected ? 8'd3 : direct_arlen;
+   assign s_arsize[3] = contender_selected ? 3'd3 : direct_arsize;
+   assign s_arprot[3] = contender_selected ? '0 : direct_arprot;
+   assign s_arburst[3] = contender_selected ? 2'd1 : direct_arburst;
+   assign s_arqos[3] = contender_selected ? demo_qos[3:0] : direct_arqos;
+   wire direct_rready;
+   assign s_rready[3] = contender_outstanding ? 1'b1 : direct_rready;
+   always_ff @(posedge clk or negedge rst_n) begin
+     if (!rst_n) begin
+       contender_valid <= 0;
+       contender_outstanding <= 0;
+     end else begin
+       if (demo_contend && busy && !contender_outstanding && !direct_arvalid)
+         contender_valid <= 1;
+       if (contender_valid && s_arready[3]) begin
+         contender_valid <= 0;
+         contender_outstanding <= 1;
+       end
+       if (contender_outstanding && s_rvalid[3]) begin
+         if (s_rresp[3] != 0 || s_rdata[3] != 0 || s_rid[3] != 0)
+           $fatal(1, "MLP contender response mismatch");
+         if (s_rlast[3]) contender_outstanding <= 0;
+       end
+     end
+   end
+   protected_host_axi_bridge #(.AXI_ID(3)) direct(.clk,.rst_n,.psel(uncached_ext_sel),.penable,.pwrite,.paddr,.pwdata,.prdata(direct_rdata),.pready(direct_ready),.pslverr(direct_error),.awvalid(s_awvalid[3]),.awready(s_awready[3]),.awid(s_awid[3]),.awaddr(s_awaddr[3]),.awlen(s_awlen[3]),.awsize(s_awsize[3]),.awburst(s_awburst[3]),.awprot(s_awprot[3]),.awqos(s_awqos[3]),.wvalid(s_wvalid[3]),.wready(s_wready[3]),.wdata(s_wdata[3]),.wstrb(s_wstrb[3]),.wlast(s_wlast[3]),.bvalid(s_bvalid[3]),.bready(s_bready[3]),.bid(s_bid[3]),.bresp(s_bresp[3]),.arvalid(direct_arvalid),.arready(s_arready[3] && !contender_selected),.arid(direct_arid),.araddr(direct_araddr),.arlen(direct_arlen),.arsize(direct_arsize),.arburst(direct_arburst),.arprot(direct_arprot),.arqos(direct_arqos),.rvalid(s_rvalid[3] && !contender_outstanding),.rready(direct_rready),.rid(s_rid[3]),.rdata(s_rdata[3]),.rresp(s_rresp[3]),.rlast(s_rlast[3]));
+`else
    protected_host_axi_bridge #(.AXI_ID(3)) direct(.clk,.rst_n,.psel(uncached_ext_sel),.penable,.pwrite,.paddr,.pwdata,.prdata(direct_rdata),.pready(direct_ready),.pslverr(direct_error),.awvalid(s_awvalid[3]),.awready(s_awready[3]),.awid(s_awid[3]),.awaddr(s_awaddr[3]),.awlen(s_awlen[3]),.awsize(s_awsize[3]),.awburst(s_awburst[3]),.awprot(s_awprot[3]),.awqos(s_awqos[3]),.wvalid(s_wvalid[3]),.wready(s_wready[3]),.wdata(s_wdata[3]),.wstrb(s_wstrb[3]),.wlast(s_wlast[3]),.bvalid(s_bvalid[3]),.bready(s_bready[3]),.bid(s_bid[3]),.bresp(s_bresp[3]),.arvalid(s_arvalid[3]),.arready(s_arready[3]),.arid(s_arid[3]),.araddr(s_araddr[3]),.arlen(s_arlen[3]),.arsize(s_arsize[3]),.arburst(s_arburst[3]),.arprot(s_arprot[3]),.arqos(s_arqos[3]),.rvalid(s_rvalid[3]),.rready(s_rready[3]),.rid(s_rid[3]),.rdata(s_rdata[3]),.rresp(s_rresp[3]),.rlast(s_rlast[3]));
+`endif
    always_comb begin if(cache_data_sel)begin host_rdata=cache_rdata;host_ready=cache_ready_apb;host_error=cache_error_apb;end else begin host_rdata=direct_rdata;host_ready=direct_ready;host_error=direct_error;end end
    l1_dcache_top cache(.clk,.rst_n,.cpu_req_valid(cache_req_valid),.cpu_req_ready(cache_req_ready),.cpu_req_addr(cache_req_addr),.cpu_req_write(cache_req_write),.cpu_req_wdata(cache_req_wdata),.cpu_req_wstrb(cache_req_wstrb),.cpu_req_size(cache_req_size),.cpu_req_id(cache_req_id),.cpu_rsp_valid(cache_rsp_valid),.cpu_rsp_ready(cache_rsp_ready),.cpu_rsp_rdata(cache_rsp_rdata),.cpu_rsp_id(cache_rsp_id),.cpu_rsp_error(cache_rsp_error),.maint_valid,.maint_ready,.maint_cmd,.maint_busy,.maint_done,.maint_error,.m_axi_awaddr(s_awaddr[0]),.m_axi_awlen(s_awlen[0]),.m_axi_awsize(s_awsize[0]),.m_axi_awburst(s_awburst[0]),.m_axi_awvalid(s_awvalid[0]),.m_axi_awready(s_awready[0]),.m_axi_wdata(s_wdata[0]),.m_axi_wstrb(s_wstrb[0]),.m_axi_wlast(s_wlast[0]),.m_axi_wvalid(s_wvalid[0]),.m_axi_wready(s_wready[0]),.m_axi_bresp(s_bresp[0]),.m_axi_bvalid(s_bvalid[0]),.m_axi_bready(s_bready[0]),.m_axi_araddr(s_araddr[0]),.m_axi_arlen(s_arlen[0]),.m_axi_arsize(s_arsize[0]),.m_axi_arburst(s_arburst[0]),.m_axi_arvalid(s_arvalid[0]),.m_axi_arready(s_arready[0]),.m_axi_rdata(s_rdata[0]),.m_axi_rresp(s_rresp[0]),.m_axi_rlast(s_rlast[0]),.m_axi_rvalid(s_rvalid[0]),.m_axi_rready(s_rready[0]),.mon_state(cache_state),.mon_hit(cache_hit),.mon_miss(cache_miss),.mon_evict(cache_evict),.mon_refill_beat(refill_beat),.mon_writeback_beat(writeback_beat));
    assign s_awid[0]=0;assign s_awprot[0]=0;assign s_awqos[0]=8;assign s_arid[0]=0;assign s_arprot[0]=0;assign s_arqos[0]=8;

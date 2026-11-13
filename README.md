@@ -247,6 +247,10 @@ integration/rv32_offload/  optional GCC/RV32I hardware-software benchmark lane
 integration/protected_offload/  optional protected descriptor-DMA integration lane
 ```
 
+## Cross-project INT8 demo
+
+Run `make cross-project-demo` to compare RV32IM scalar and DMA-backed two-layer inference under cache maintenance and AXI QoS contention. See the [demo and trace checks](docs/cross_project_demo.md).
+
 ## Stateful Compute Crossover
 
 Additional [end-to-end lifetime and recovery tests](docs/compute_end_to_end_closure.md)

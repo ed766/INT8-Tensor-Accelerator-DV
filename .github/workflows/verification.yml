@@ -72,7 +72,7 @@ jobs:
       - name: Install and verify pinned external tools
         if: matrix.lane == 'protected-offload'
         run: |
-          make -C ../ucie_chiplet_soc/chiplet_extension rv32-external-tools-install
+          env -u GITHUB_PATH make -C ../ucie_chiplet_soc/chiplet_extension rv32-external-tools-install
           source ../ucie_chiplet_soc/chiplet_extension/build/external_riscv_tools/environment.sh
           python3 ../ucie_chiplet_soc/chiplet_extension/scripts/check_external_riscv_tools.py --require
       - name: Require RV32IM Spike and ACT4/Sail execution
@@ -81,6 +81,9 @@ jobs:
           source ../ucie_chiplet_soc/chiplet_extension/build/external_riscv_tools/environment.sh
           python3 ../ucie_chiplet_soc/chiplet_extension/scripts/run_external_iss.py --require --isa rv32im_zicsr
           python3 ../ucie_chiplet_soc/chiplet_extension/scripts/run_act4.py --isa rv32im --require --report ../ucie_chiplet_soc/chiplet_extension/reports/rv32_act_m_summary.csv
+      - name: Run cross-project INT8 demo
+        if: matrix.lane == 'protected-offload'
+        run: make cross-project-demo
       - name: Run protected-offload release checks
         if: matrix.lane == 'protected-offload'
         run: make protected-offload-release-check
@@ -93,3 +96,8 @@ jobs:
           path: |
             int8_tensor_accelerator_dv/reports/
             int8_tensor_accelerator_dv/build/formal*.log
+            int8_tensor_accelerator_dv/build/protected_offload/mlp_demo/**/*.log
+            int8_tensor_accelerator_dv/build/protected_offload/mlp_demo/**/*.trace
+            int8_tensor_accelerator_dv/build/protected_offload/mlp_demo/summary.csv
+            int8_tensor_accelerator_dv/build/protected_offload/mlp_demo/evidence.json
+            int8_tensor_accelerator_dv/build/protected_offload/dma_stall_faults/**/*.log
