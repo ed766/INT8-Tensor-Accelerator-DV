@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import argparse
 import subprocess
+import os
 from functools import cache
 from pathlib import Path
 from coverage_provenance import validate_manifest
@@ -16,14 +17,14 @@ CASES = ROOT / "build/protected_offload/shared_firmware"
 
 
 @cache
-def ownership_monitor_lines(path: str) -> frozenset[int]:
+def ownership_monitor_lines(path: str, guard: str = "PROTECTED_OWNERSHIP_CHECKS") -> frozenset[int]:
     """Classify verification-only blocks by guards, not shifting line numbers."""
     stack: list[bool] = []
     result: set[int] = set()
     for number, source in enumerate((ROOT / path).read_text().splitlines(), 1):
         text = source.strip()
         if text.startswith(("`ifdef ", "`ifndef ")):
-            stack.append(text == "`ifdef PROTECTED_OWNERSHIP_CHECKS")
+            stack.append(text == "`ifdef " + guard)
         if any(stack):
             result.add(number)
         if text.startswith("`endif") and stack:
@@ -33,6 +34,8 @@ def ownership_monitor_lines(path: str) -> frozenset[int]:
 
 def scope_for(path: str, line: str = "") -> str:
     if path.startswith("integration/protected_offload/rtl/"):
+        if path.endswith("/rv32_protected_shared_top.sv") and line.isdigit() and int(line) in ownership_monitor_lines(path,"TEST_FABRIC_CONTENDER"):
+            return "verification_contention_generator"
         if path.endswith("/protected_axi_sram.sv"):
             return "verification_memory_target_model"
         if path.endswith("/rv32_protected_shared_top.sv") and line.isdigit() and (
@@ -55,6 +58,7 @@ def scope_for(path: str, line: str = "") -> str:
 
 
 def main() -> int:
+    global REPORT, RUN_REPORT
     simulator_version = ""
     for tool in ("verilator", "verilator_coverage"):
         version = subprocess.run([tool, "--version"], text=True, capture_output=True)
@@ -68,7 +72,46 @@ def main() -> int:
                         help="regenerate summaries from the latest coverage databases")
     parser.add_argument("--rebuild-index", action="store_true",
                         help="rebuild the 257-run index from isolated coverage-lane reports")
+    parser.add_argument("--stateful", action="store_true", help="isolated directed and seeded stateful coverage, not canonical closure")
+    parser.add_argument("--refresh-family", help="rerun a stateful family and replace only its provenance-bound native rows")
     args = parser.parse_args()
+    prefix = "compute_stateful" if args.stateful else "compute_crossover"
+    if args.stateful:
+        from stateful_cases import cases, random_cases
+    expected = len(cases()) + len(random_cases()) if args.stateful else 257
+    if args.stateful:
+        if args.rebuild_index:
+            raise SystemExit("stateful coverage has one isolated lane; no rebuild-index")
+        REPORT = ROOT / "reports/compute_stateful_code_coverage.csv"
+        RUN_REPORT = ROOT / "reports/compute_stateful_code_coverage_runs.csv"
+        if args.refresh_family:
+            from stateful_cases import cases, random_cases
+            selected={c['name'] for c in cases()+random_cases() if args.refresh_family in (c['family'],c['name'])}
+            if not selected:raise SystemExit("unknown stateful refresh family")
+            subprocess.run(["python3",str(Path(__file__).with_name("run_shared_firmware.py")),"--model","--code-coverage"],
+                           cwd=ROOT,env=dict(os.environ,PROTECTED_STATEFUL=args.refresh_family),check=True)
+            with (ROOT/f"reports/compute_stateful_{args.refresh_family}_coverage_runs.csv").open(newline="") as handle:
+                refreshed=list(csv.DictReader(handle))
+            if {r['scenario'] for r in refreshed}!=selected or any(r['status']!='PASS' for r in refreshed):
+                raise SystemExit("refresh requires all selected native runs to pass")
+            with RUN_REPORT.open(newline="") as handle:combined=[r for r in csv.DictReader(handle) if r['scenario'] not in selected]
+            combined.extend(refreshed)
+            with RUN_REPORT.open("w",newline="") as handle:
+                writer=csv.DictWriter(handle,fieldnames=combined[0],lineterminator="\n");writer.writeheader();writer.writerows(combined)
+            args.reuse=True
+        if not args.reuse:
+            combined = []
+            for family in ("all", "random"):
+                subprocess.run(["python3", str(Path(__file__).with_name("run_shared_firmware.py")), "--model", "--code-coverage"],
+                               cwd=ROOT, env=dict(os.environ, PROTECTED_STATEFUL=family), check=True)
+                with (ROOT / f"reports/compute_stateful_{family}_coverage_runs.csv").open(newline="") as handle:
+                    combined.extend(csv.DictReader(handle))
+            with RUN_REPORT.open("w", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=combined[0], lineterminator="\n")
+                writer.writeheader(); writer.writerows(combined)
+            args.reuse = True
+    elif args.refresh_family:
+        raise SystemExit("--refresh-family requires --stateful")
     rows: list[dict[str, str]] = []
     if args.rebuild_index:
         sources = [ROOT / f"reports/compute_crossover_coverage_runs_{lane}.csv"
@@ -130,10 +173,10 @@ def main() -> int:
             writer.writeheader()
             writer.writerows(rows)
     databases = [ROOT / Path(row["trace"]).parent / "integration_coverage.dat" for row in rows]
-    if len(rows) != 257 or len({row.get("scenario") for row in rows}) != 257 or \
+    if len(rows) != expected or len({row.get("scenario") for row in rows}) != expected or \
             any(not path.is_file() for path in databases):
         missing = [str(path) for path in databases if not path.is_file()]
-        raise SystemExit(f"expected 257 passing coverage runs (48 directed + 100 firmware-random + 100 CPU-stream + 1 APB edge + 8 cache-ownership) with unique DBs; got {len(rows)} rows; missing={missing[:3]}")
+        raise SystemExit(f"expected {expected} passing coverage runs with unique DBs; got {len(rows)} rows; missing={missing[:3]}")
     if any(row.get("status") != "PASS" for row in rows):
         raise SystemExit("coverage lane contains a failing integration scenario")
     for row, database in zip(rows, databases):
@@ -145,7 +188,14 @@ def main() -> int:
     # expression and toggle points into DA/BRDA rows, so treating that output
     # as source line/branch coverage inflates both denominators.
     point_hits: dict[tuple[str, str, str, str, str, str], int] = {}
-    for database in databases:
+    edge_group = f"targeted_edges_{sum(c['family']=='edges' for c in cases())}" if args.stateful else "targeted_edges"
+    gap_group=f"advanced_gap_{sum(c['family'].startswith('gap_') for c in cases())}" if args.stateful else "advanced_gap"
+    groups=("original_23", edge_group, "end_to_end_8", gap_group, "seeded_jobs_32") if args.stateful else ("original_23",edge_group,"seeded_jobs_32")
+    group_hits = {name: {} for name in groups}
+    stateful_groups = ({c["name"]: gap_group if c["family"].startswith('gap_') else "end_to_end_8" if c["family"]=="end_to_end" else edge_group if c["family"]=="edges" else "original_23" for c in cases()}
+                       if args.stateful else {})
+    for run_row, database in zip(rows, databases):
+        group = stateful_groups.get(run_row["scenario"], "seeded_jobs_32")
         for record in database.read_text(errors="replace").splitlines():
             if not record.startswith("C '"):
                 continue
@@ -184,6 +234,8 @@ def main() -> int:
                 identity = (rel, meta.get("l", ""), meta.get("n", ""),
                             point_type, "", meta.get("o", ""))
             point_hits[identity] = max(point_hits.get(identity, 0), count)
+            if args.stateful:
+                group_hits[group][identity] = max(group_hits[group].get(identity, 0), count)
 
     kinds = ("line", "branch", "expr", "toggle")
     point_sets: dict[str, dict[tuple[str, str, str, str, str, str], int]] = {
@@ -192,6 +244,9 @@ def main() -> int:
     for identity, count in point_hits.items():
         scope = scope_for(identity[0], identity[1])
         point_sets.setdefault(scope, {})[identity] = count
+        if identity[0].startswith("integration/protected_offload/vendor/rv32/"):
+            module_scope = Path(identity[0]).stem
+            point_sets.setdefault(module_scope, {})[identity] = count
         point_sets["integrated_protected_offload_and_rv32"][identity] = count
 
     scope_rows: list[dict[str, str]] = []
@@ -202,7 +257,7 @@ def main() -> int:
             "Defensive FSM default; state is initialized to IDLE and all legal transitions remain within the declared state enum.",
         ("integration/protected_offload/rtl/protected_host_axi_bridge.sv", "54"):
             "Defensive FSM default; state is initialized to IDLE and all legal transitions remain within the declared state enum.",
-        ("integration/protected_offload/rtl/protected_offload_dma.sv", "519"):
+        ("integration/protected_offload/rtl/protected_offload_dma.sv", "522"):
             "Defensive DMA FSM default; state is initialized to IDLE and all legal transitions remain within the declared state enum.",
     }
     for scope, points in sorted(point_sets.items()):
@@ -245,7 +300,7 @@ def main() -> int:
                            "line_target_met": str(line_pct is not None and line_pct >= 95).lower(),
                            "branch_target_met": str(branch_pct is not None and branch_pct >= 90).lower()})
 
-    point_path = ROOT / "reports/compute_crossover_code_coverage_points.csv"
+    point_path = ROOT / f"reports/{prefix}_code_coverage_points.csv"
     with point_path.open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=["scope", "rtl_file", "line", "hit_count", "status"], lineterminator="\n")
         writer.writeheader()
@@ -255,7 +310,7 @@ def main() -> int:
                          if kind == "line" and line_no.isdigit())
     detail_names = {"branch": "branches", "expr": "expressions", "toggle": "toggles"}
     for kind, suffix in detail_names.items():
-        output = ROOT / f"reports/compute_crossover_code_coverage_{suffix}.csv"
+        output = ROOT / f"reports/{prefix}_code_coverage_{suffix}.csv"
         with output.open("w", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=["scope", "rtl_file", "line", "point", "page", "option", "hit_count", "status"], lineterminator="\n")
             writer.writeheader()
@@ -264,7 +319,7 @@ def main() -> int:
                               "hit_count": count, "status": "HIT" if count else "UNCOVERED"}
                              for (path, line_no, number, point_type, page, option), count in sorted(point_hits.items())
                              if point_type == kind)
-    exclusion_path = ROOT / "reports/compute_crossover_code_coverage_exclusions.csv"
+    exclusion_path = ROOT / f"reports/{prefix}_code_coverage_exclusions.csv"
     with exclusion_path.open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=["rtl_file", "line", "point", "page", "option", "hit_count", "rationale"], lineterminator="\n")
         writer.writeheader(); writer.writerows(reviewed_branch_exclusions)
@@ -282,6 +337,33 @@ def main() -> int:
     control_branch_hit, control_branch_total, control_branch_pct = controlled["branch"]
     control_row = next(row for row in scope_rows if row["scope"] == "new_protected_offload_control_rtl")
     branch_text = f"{branch_hit}/{branch_found} ({bpct:.2f}%)" if bpct is not None else "NA"
+    if args.stateful:
+        contribution_rows=[]
+        for scope in ("new_protected_offload_control_rtl", "rv32_muldiv", "rv32_core_and_feeder"):
+            selected=point_sets.get(scope,{})
+            for kind in ("line", "branch"):
+                identities=[identity for identity in selected if identity[3]==kind]
+                previous=set()
+                for group, counts in group_hits.items():
+                    covered={identity for identity in identities if counts.get(identity,0)>0}
+                    contribution_rows.append(dict(scope=scope,point_type=kind,group=group,
+                        hit=len(covered),union_denominator=len(identities),
+                        newly_hit_after_prior_groups=len(covered-previous)))
+                    previous |= covered
+        with (ROOT / "reports/compute_stateful_code_coverage_contributions.csv").open("w",newline="") as handle:
+            writer=csv.DictWriter(handle,fieldnames=contribution_rows[0],lineterminator="\n")
+            writer.writeheader();writer.writerows(contribution_rows)
+        text = "# Stateful Crossover Native Code Coverage\n\n"
+        text += f"Fresh native Verilator 5.049 instrumentation of {expected} supplemental firmware scenarios (directed and seeded). Assertions run separately in the asserted regression; this instrumentation build defines SYNTHESIS. Source-point unions do not imply every structural variant is independently closed. No raw toggle closure is claimed.\n\n"
+        text += "| Scope | Raw line hit/total (%) | Raw branch hit/total (%) | Raw toggle (%) |\n|---|---|---|---|\n"
+        for row in scope_rows:
+            text += f"| {row['scope']} | {row['line_hit']}/{row['line_total']} ({row['line_percent']}) | {row['branch_hit']}/{row['branch_total']} ({row['branch_percent']}) | {row['toggle_percent']} |\n"
+        text += f"\nNew-control raw targets: 95% line / 90% branch. Measured gate: **{'PASS' if control_line_pct >= 95 and control_branch_pct >= 90 else 'FAIL'}**. This lane is supplemental, not a replacement for canonical integration coverage; imported-module gaps remain visible. No exclusions are used to turn an unmet raw target into PASS.\n"
+        text += "\n[Incremental group contribution](../reports/compute_stateful_code_coverage_contributions.csv) uses the same source-point union denominator. New points are credited in original-directed, targeted-edge, end-to-end, seeded-workload order; this is not independent per-configuration closure.\n"
+        text += "\n[Remaining-hole review](../reports/compute_stateful_coverage_hole_review.csv) retains all holes in raw denominators. The three uncovered new-control lines and two muldiv lines are defensive defaults. Remaining integrated branches include topology-constrained waits, a caller-constrained magnitude helper and an illegal-peer response path. [Independent-peer tests](compute_peer_holes.md) exercise module waits and wrong-tag containment separately; they do not inflate this integration percentage.\n"
+        (ROOT / "docs/compute_stateful_code_coverage.md").write_text(text)
+        print(f"STATEFUL_CODE_COVERAGE|runs={len(rows)}|control_line={control_line_pct:.2f}|control_branch={control_branch_pct:.2f}")
+        return int(control_line_pct < 95 or control_branch_pct < 90)
     (ROOT / "docs/compute_crossover_code_coverage.md").write_text(
         "# Compute Crossover Integrated-Top Code Coverage\n\n"
         "Collected from 48 directed compiled-firmware scenarios, 100 seeded firmware/DMA schedules, 100 generated RV32M instruction streams, one APB edge probe, and 8 cache-enabled ownership scenarios on `tb_rv32_protected_shared`, "

@@ -1,0 +1,13 @@
+scope,passing_runs,databases,line_hit,line_total,line_percent,branch_hit,branch_total,branch_percent,reviewed_branch_hit,reviewed_branch_total,reviewed_branch_percent,reviewed_branch_exclusions,expr_hit,expr_total,expr_percent,toggle_hit,toggle_total,toggle_percent,line_target_percent,branch_target_percent,line_target_met,branch_target_met
+imported_axi_fabric_and_iommu,94,94,70,79,88.61,93,112,83.04,93,112,83.04,0,161,228,70.61,2787,7696,36.21,95,90,false,false
+imported_chiplet,94,94,354,465,76.13,210,340,61.76,210,340,61.76,0,364,495,73.54,10771,15778,68.27,95,90,false,false
+imported_l1_cache,94,94,43,59,72.88,61,92,66.30,61,92,66.30,0,98,188,52.13,1498,2646,56.61,95,90,false,false
+integrated_protected_offload_and_rv32,94,94,720,899,80.09,724,954,75.89,724,954,75.89,0,1389,1821,76.28,31512,57528,54.78,95,90,false,false
+new_protected_offload_control_rtl,94,94,119,122,97.54,175,186,94.09,175,186,94.09,0,403,429,93.94,12790,25608,49.95,95,90,true,true
+rv32_core,94,94,83,121,68.60,60,86,69.77,60,86,69.77,0,133,215,61.86,1686,3344,50.42,95,90,false,false
+rv32_core_and_feeder,94,94,97,137,70.80,98,126,77.78,98,126,77.78,0,187,273,68.50,2870,4624,62.07,95,90,false,false
+rv32_muldiv,94,94,11,13,84.62,32,34,94.12,32,34,94.12,0,45,48,93.75,1070,1074,99.63,95,90,false,true
+rv32_rom_feeder,94,94,3,3,100.00,6,6,100.00,6,6,100.00,0,9,10,90.00,114,206,55.34,95,90,true,true
+verification_contention_generator,94,94,3,3,100.00,8,8,100.00,8,8,100.00,0,11,17,64.71,14,14,100.00,95,90,true,true
+verification_memory_target_model,94,94,13,13,100.00,41,42,97.62,41,42,97.62,0,110,116,94.83,714,1014,70.41,95,90,true,true
+verification_ownership_monitor,94,94,21,21,100.00,38,48,79.17,38,48,79.17,0,55,75,73.33,68,148,45.95,95,90,true,false

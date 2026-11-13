@@ -32,7 +32,13 @@ module tb_protected_dma_axi_adapter;
       end
       wait(rsp_valid);if(rsp_error!==expect_error)failures++;
       if(!wr&&!expect_error&&rsp_rdata!==expect_data)failures++;
-      repeat(2)@(posedge clk);rsp_ready=1;@(posedge clk);rsp_ready=0;
+      repeat(5)begin
+        @(negedge clk);
+        if(!rsp_valid||req_ready||rsp_error!==expect_error)$fatal(1,"held DMA response changed");
+        if(!wr&&!expect_error&&rsp_rdata!==expect_data)$fatal(1,"held DMA response data changed");
+      end
+      $display("HOLE_EVT|module=protected_dma_axi_adapter|phase=response_hold|waits=5");
+      rsp_ready=1;@(negedge clk);rsp_ready=0;
     end
   endtask
 

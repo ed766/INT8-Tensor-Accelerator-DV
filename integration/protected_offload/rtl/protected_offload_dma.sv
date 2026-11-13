@@ -245,7 +245,11 @@ module protected_offload_dma #(
   assign completion_occupancy = 3'(completion_count);
   always_comb begin
     bank_referenced = '0;
+`ifdef PROTECTED_MUT_RETIRE_REFERENCE_RELEASE
+    if (busy && state != RETIRE)
+`else
     if (busy)
+`endif
       bank_referenced[active.bank] = 1'b1;
     for (int i = 0; i < QUEUE_DEPTH; i++) begin
       queue_bank_entry = submit_fifo[QW'(submit_head + QW'(i))];

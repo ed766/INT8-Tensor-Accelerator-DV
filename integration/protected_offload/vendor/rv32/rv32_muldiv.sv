@@ -24,7 +24,6 @@ module rv32_muldiv (
   logic        divide_special_q;
   logic [31:0] divide_special_result_q;
   logic [31:0] result_q;
-  logic mutation_started_q = 1'b0;
 
   wire is_division = op_q[2];
   assign req_ready = state_q == IDLE;
@@ -38,7 +37,8 @@ module rv32_muldiv (
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
 `ifdef RV32_BUG_M_STALE_RESET
-      state_q <= mutation_started_q ? RESPONSE : IDLE;
+      // Poison only an interrupted operation, not the initial boot epoch.
+      state_q <= state_q == IDLE ? IDLE : RESPONSE;
 `else
       state_q <= IDLE;
 `endif
@@ -63,7 +63,6 @@ module rv32_muldiv (
         IDLE: if (req_valid) begin
           logic lhs_signed, rhs_signed;
           logic [31:0] lhs_mag, rhs_mag;
-          mutation_started_q <= 1'b1;
           lhs_signed = (req_op == 3'd1) || (req_op == 3'd2) ||
                        (req_op == 3'd4) || (req_op == 3'd6);
           rhs_signed = (req_op == 3'd1) || (req_op == 3'd4) || (req_op == 3'd6)
@@ -167,6 +166,13 @@ module rv32_muldiv (
     else formal_past_valid <= 1'b1;
   end
   always_ff @(posedge clk) if (rst_n) begin
+    if (formal_past_valid && $past(rst_n && req_valid && req_ready)) begin
+      a_operands_captured: assert (lhs_q == $past(req_lhs) && rhs_q == $past(req_rhs));
+      a_opcode_captured: assert (op_q == $past(req_op));
+    end
+    if (formal_past_valid && $past(rst_n && !req_ready) && !req_ready) begin
+      a_captured_operands_stable: assert ($stable(lhs_q) && $stable(rhs_q) && $stable(op_q));
+    end
     if (formal_past_valid && $past(rsp_valid && !rsp_ready)) begin
       a_result_stable: assert (rsp_valid && $stable(rsp_result));
     end

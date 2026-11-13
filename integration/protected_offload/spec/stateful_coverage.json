@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "evidence": "actual_RTL_event_windows_with_strict_replay",
+  "required_scenarios": [
+    "stateful_irq_fault_timer", "stateful_irq_mask_pending", "stateful_irq_wfi_timer",
+    "stateful_reset_m_dma_early", "stateful_reset_m_dma_middle", "stateful_reset_m_dma_finalize", "stateful_reset_m_dma_response",
+    "stateful_tag_wrap", "stateful_both_bank_queue",
+    "stateful_tlb_eviction", "stateful_permission_hit", "stateful_repeated_retry",
+    "stateful_cache_dependency", "stateful_cache_maint_retry",
+    "stateful_pressure_0", "stateful_pressure_25", "stateful_pressure_50", "stateful_pressure_75", "stateful_sleep_arithmetic",
+    "stateful_round_ties", "stateful_saturation", "stateful_zero_points_relu", "stateful_accumulator_wrap",
+    "stateful_csr_edges", "stateful_input_permission", "stateful_input_bus_error", "stateful_invalid_generation",
+    "stateful_queue_full_recover", "stateful_pop_wait", "stateful_last_output_retry", "stateful_m_corners_live", "stateful_mailbox_reserved",
+    "stateful_lifetime_campaign", "stateful_cross_stage_retry", "stateful_handler_cached_arithmetic", "stateful_fault_both_pending", "stateful_reset_multiple_owners",
+    "stateful_queued_invalidation", "stateful_read_permission_downgrade", "stateful_contended_sleep_drain",
+    "stateful_stale_mapping_unowned_page",
+    "stateful_epoch_metadata_status", "stateful_epoch_metadata_address", "stateful_epoch_metadata_stage",
+    "stateful_epoch_publication", "stateful_epoch_before_pop", "stateful_epoch_ptw_req",
+    "stateful_epoch_accepted_output_write", "stateful_epoch_dma_b_wait", "stateful_epoch_mem_rsp",
+    "stateful_epoch_host_w_wait", "stateful_epoch_maintenance_invalidation",
+    "stateful_fabric_contention_0", "stateful_fabric_contention_25",
+    "stateful_fabric_contention_50", "stateful_fabric_contention_75",
+    "stateful_cache_alias_dirty_eviction", "stateful_retire_reference_pressure",
+    "stateful_permission_hit_independent", "stateful_alias_unowned_line",
+    "stateful_retry_prefix_independent", "stateful_retry_input_independent"
+  ],
+  "excluded_claims": [
+    "exhaustive Cartesian interrupt/fault/timing permutations",
+    "simultaneous M/DMA/AXI/IRQ ownership at every reset phase",
+    "all physical aliases and shared-cache-line handler accesses",
+    "independent construction of two witnesses for every high-risk predicate",
+    "unbounded core-control or 32-bit arithmetic equivalence proof"
+  ]
+}

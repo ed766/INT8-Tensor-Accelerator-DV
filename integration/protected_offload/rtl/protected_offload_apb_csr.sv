@@ -65,6 +65,10 @@ module protected_offload_apb_csr (
         12'h018, 12'h02c, 12'h030: prdata = 32'd0;
         default: pslverr = 1'b1;
       endcase
+`ifdef PROTECTED_MUT_TORN_COMPLETION_METADATA
+      if (!pwrite && paddr == 12'h028 && completion_valid)
+        prdata = prdata ^ 32'h00000100;
+`endif
     end
   end
 

@@ -296,7 +296,10 @@ def check(path: Path, strict_schema=False):
     byte_memory: dict[int, int] = {address: 0 for address in range(0x10000000, 0x10010000)}
     pte_memory: dict[int, int] = {}
     ptw_faults: set[int] = set()
-    translation_cache: list[dict[str, int]] = []
+    # Invalidation clears valid slots, not the round-robin replacement cursor.
+    # protected_offload_service elaborates four entries (leaf default is eight).
+    translation_cache: list[dict[str, int] | None] = [None] * 4
+    translation_replace = 0
     submitted=defaultdict(deque)
     pending_output_writes=defaultdict(int)
     maintenance_active = False
@@ -430,7 +433,8 @@ def check(path: Path, strict_schema=False):
             axi_ar.clear()
             expected_axi_write_events.clear()
             last_successful_axi_write = None
-            translation_cache.clear()
+            translation_cache = [None] * 4
+            translation_replace = 0
             commands=defaultdict(deque)
             accel_config = _empty_accel_config()
             accel_jobs.clear()
@@ -684,8 +688,9 @@ def check(path: Path, strict_schema=False):
                 errors.append(f"line {event.get('_line')}: TLB_INVALIDATE missing scope")
             invalidate_all = _num(event, "all", 0) != 0
             invalidate_asid = _num(event, "asid", -1)
-            translation_cache = [entry for entry in translation_cache
-                                 if not invalidate_all and entry["asid"] != invalidate_asid]
+            translation_cache = [entry if entry is not None and not invalidate_all
+                                 and entry["asid"] != invalidate_asid else None
+                                 for entry in translation_cache]
         elif kind == "AXI_AR":
             if axi_ar:
                 errors.append(f"host accepted a second read before final R at line {event.get('_line')}")
@@ -837,7 +842,7 @@ def check(path: Path, strict_schema=False):
                         if int(str(event.get("iova", "-1")), 16) != iova or _value_int(event.get("asid"), -2) != asid or _value_int(event.get("write"), -2) != write:
                             errors.append(f"XLATE_RSP request identity differs from accepted request at line {event.get('_line')}")
                         cached = next((entry for entry in reversed(translation_cache)
-                                       if entry["asid"] == asid and entry["vpn1"] == ((iova >> 22) & 0x3FF)
+                                       if entry is not None and entry["asid"] == asid and entry["vpn1"] == ((iova >> 22) & 0x3FF)
                                        and (entry["superpage"] or entry["vpn0"] == ((iova >> 12) & 0x3FF))), None)
                         if cached is not None:
                             model_hit = 1
@@ -861,13 +866,12 @@ def check(path: Path, strict_schema=False):
                                 else:
                                     leaf_addr = (((root >> 10) & 0xFFFFF) << 12) + (((iova >> 12) & 0x3FF) * 4)
                                     leaf_pte, superpage = pte_memory.get(leaf_addr, 0), 0
-                                translation_cache.append({"asid": asid, "vpn1": (iova >> 22) & 0x3FF,
+                                translation_cache[translation_replace] = {"asid": asid, "vpn1": (iova >> 22) & 0x3FF,
                                     "vpn0": (iova >> 12) & 0x3FF, "ppn": (leaf_pte >> 10) & 0xFFFFF,
                                     "read": (leaf_pte >> 1) & 1, "write": (leaf_pte >> 2) & 1,
                                     "accessed": (leaf_pte >> 6) & 1, "dirty": (leaf_pte >> 7) & 1,
-                                    "superpage": superpage})
-                                if len(translation_cache) > 8:
-                                    translation_cache.pop(0)
+                                    "superpage": superpage}
+                                translation_replace = (translation_replace + 1) % len(translation_cache)
                         if actual_fault != model_fault:
                             errors.append(f"IOMMU fault mismatch at line {event.get('_line')}: observed {actual_fault}, predicted {model_fault}")
                         if actual_paddr != model_paddr:

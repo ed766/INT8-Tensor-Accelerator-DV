@@ -3,6 +3,13 @@ module tb_rv32_protected_shared #(parameter bit USE_CACHE=0,parameter bit CPU_EN
  logic clk=0,rst_n=0,firmware_done,commit_valid,irq,chip_active_debug,chip_link_debug;logic[2:0]chip_state_debug,chip_submit_debug,chip_comp_debug;logic[8:0]chip_send_debug,chip_recv_debug;logic[31:0]firmware_result,commit_pc,cycles,benchmark_cycles;logic recovery_snapshot_valid=0;logic[31:0]recovery_snapshot_addr=0;logic[63:0]recovery_snapshot_data=0;logic recovery_snapshot_sent=0;logic reset_trigger_pending=0;string reset_phase="none";always #5 clk=~clk;
  rv32_protected_shared_top #(.USE_CACHE(USE_CACHE),.CPU_ENABLE_M(CPU_ENABLE_M),.CPU_ENABLE_TRAPS(CPU_ENABLE_TRAPS),.ENABLE_CHIPLET(ENABLE_CHIPLET),.COMPLETION_POP_WAIT_CYCLES(COMPLETION_POP_WAIT_CYCLES)) dut(.*);integer commits=0;
  integer prolonged_wait_cycles=0;
+ logic prior_reset_release=0;
+ always @(posedge clk) begin
+   if(rst_n && !prior_reset_release)
+     a_no_stale_muldiv_result_after_reset: assert(!dut.cpu.muldiv_rsp_valid)
+       else $fatal(1,"a_no_stale_muldiv_result_after_reset");
+   prior_reset_release<=rst_n;
+ end
  always @(posedge clk) begin
    if(!rst_n || !dut.psel || !dut.penable || dut.pready)prolonged_wait_cycles<=0;
    else prolonged_wait_cycles<=prolonged_wait_cycles+1;
@@ -11,6 +18,11 @@ module tb_rv32_protected_shared #(parameter bit USE_CACHE=0,parameter bit CPU_EN
    if(rst_n && !reset_issued && reset_at<0 && reset_phase!="none") begin
      case(reset_phase)
        "ptw_req": if(dut.ptw_req_valid&&dut.ptw_req_ready)reset_trigger_pending<=1;
+       "metadata_status": if(dut.psel&&dut.penable&&dut.pready&&!dut.pwrite&&dut.paddr==32'h4000_0020)reset_trigger_pending<=1;
+       "metadata_address": if(dut.psel&&dut.penable&&dut.pready&&!dut.pwrite&&dut.paddr==32'h4000_0024)reset_trigger_pending<=1;
+       "metadata_stage": if(dut.psel&&dut.penable&&dut.pready&&!dut.pwrite&&dut.paddr==32'h4000_0028)reset_trigger_pending<=1;
+       "publication": if(dut.completion_published)reset_trigger_pending<=1;
+       "dma_b_wait": if(dut.crossover_observer.mem_pending&&!dut.mem_req_valid&&!dut.mem_rsp_valid&&dut.svc.dma.state==dut.svc.dma.OUTPUT_MEM_WAIT)reset_trigger_pending<=1;
        "mem_req": if(dut.mem_req_valid&&dut.mem_req_ready)reset_trigger_pending<=1;
        "accepted_output_write": if(dut.s_awvalid[1]&&dut.s_awready[1])reset_trigger_pending<=1;
       // Response/completion reset points are handled at the falling edge
@@ -19,6 +31,10 @@ module tb_rv32_protected_shared #(parameter bit USE_CACHE=0,parameter bit CPU_EN
        "mdiv_result": ;
        "apb_wait": if(dut.psel&&dut.penable&&!dut.pready)reset_trigger_pending<=1;
        "mdiv_busy": if(dut.cpu.muldiv_active_q)reset_trigger_pending<=1;
+       "m_dma_early", "m_dma_middle", "m_dma_finalize": ;
+       "m_dma_response": ;
+       "multiple_owners": ;
+       "before_pop": ;
        // Target WREADY is delayed for this test so the address handshake
        // leaves an observable ownership window before the first data beat.
        "host_w_wait": if((|(dut.m_awvalid & dut.m_awready)) &&
@@ -35,7 +51,13 @@ module tb_rv32_protected_shared #(parameter bit USE_CACHE=0,parameter bit CPU_EN
  always @(negedge clk) if(rst_n && !reset_issued &&
      (reset_trigger_pending ||
       (reset_phase=="mem_rsp"&&dut.mem_rsp_valid&&dut.mem_rsp_ready) ||
+      (reset_phase=="before_pop"&&dut.dma_sel&&dut.penable&&dut.pwrite&&dut.paddr==32'h4000_002c&&dut.svc.completion_valid) ||
       (reset_phase=="mdiv_result"&&dut.cpu.muldiv_rsp_valid&&dut.cpu.muldiv_rsp_ready) ||
+      (reset_phase=="m_dma_early"&&dut.svc.dma.busy&&dut.cpu.muldiv_active_q&&dut.cpu.u_muldiv.state_q==1&&dut.cpu.u_muldiv.iteration_q==2) ||
+      (reset_phase=="m_dma_middle"&&dut.svc.dma.busy&&dut.cpu.muldiv_active_q&&dut.cpu.u_muldiv.state_q==1&&dut.cpu.u_muldiv.iteration_q==16) ||
+      (reset_phase=="m_dma_finalize"&&dut.svc.dma.busy&&dut.cpu.muldiv_active_q&&dut.cpu.u_muldiv.state_q==2) ||
+      (reset_phase=="m_dma_response"&&dut.svc.dma.busy&&dut.cpu.muldiv_rsp_valid) ||
+      (reset_phase=="multiple_owners"&&dut.svc.dma.busy&&dut.cpu.muldiv_active_q&&dut.cpu.u_muldiv.iteration_q>=2&&dut.crossover_observer.mem_pending&&dut.svc.completion_valid&&dut.irq_pending[1]) ||
       (reset_phase=="completion"&&dut.svc.completion_valid&&!dut.svc.completion_ready))) begin
    rst_n=0;reset_issued=1;
  end

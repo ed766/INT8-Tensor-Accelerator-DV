@@ -56,6 +56,12 @@ static volatile uint32_t access_trap_causes;
 static volatile uint32_t timer_seen,interrupt_order;
 static volatile uint32_t chip_irq_seen,chip_irq_status,chip_irq_words;
 static volatile uint32_t scenario_activation;
+#ifdef TEST_STATEFUL_CASE
+static void stateful_trap(uint32_t cause);
+#endif
+#ifdef TEST_M_SWEEP
+extern uint32_t m_sweep_probe(void);
+#endif
 #if TEST_SCENARIO_ID != 0
 extern uint32_t crossover_scenario_program(void);
 #endif
@@ -77,6 +83,37 @@ static __attribute__((unused)) void wait_for_device_irq(void){
   }
 }
 #ifdef TEST_M_DEPENDENCY
+#ifdef TEST_LIVE_M_OPCODE
+static __attribute__((noinline)) uint32_t live_opcode_probe(void){
+  uint32_t result;
+  const uint32_t a=0xfffedcbbu,b=0x23457u;
+#if TEST_LIVE_M_OPCODE == 0
+  __asm__ volatile("mul %0,%1,%2":"=r"(result):"r"(a),"r"(b));
+  return result==0x7de8ff8du;
+#elif TEST_LIVE_M_OPCODE == 1
+  __asm__ volatile("mulh %0,%1,%2":"=r"(result):"r"(a),"r"(b));
+  return result==0xfffffffdu;
+#elif TEST_LIVE_M_OPCODE == 2
+  __asm__ volatile("mulhsu %0,%1,%2":"=r"(result):"r"(a),"r"(b));
+  return result==0xfffffffdu;
+#elif TEST_LIVE_M_OPCODE == 3
+  __asm__ volatile("mulhu %0,%1,%2":"=r"(result):"r"(a),"r"(b));
+  return result==0x23454u;
+#elif TEST_LIVE_M_OPCODE == 4
+  __asm__ volatile("div %0,%1,%2":"=r"(result):"r"(a),"r"(b));
+  return result==0u;
+#elif TEST_LIVE_M_OPCODE == 5
+  __asm__ volatile("divu %0,%1,%2":"=r"(result):"r"(a),"r"(b));
+  return result==0x7420u;
+#elif TEST_LIVE_M_OPCODE == 6
+  __asm__ volatile("rem %0,%1,%2":"=r"(result):"r"(a),"r"(b));
+  return result==a;
+#else
+  __asm__ volatile("remu %0,%1,%2":"=r"(result):"r"(a),"r"(b));
+  return result==0xe5dbu;
+#endif
+}
+#endif
 // Keep an architectural M dependency in the firmware path.  It is deliberately
 // runtime-valued and noinline so retirement traces, rather than ELF metadata,
 // prove that the RV32IM integration actually exercised MUL and DIV.
@@ -112,6 +149,10 @@ static __attribute__((noinline)) uint32_t m_all_opcode_probe(void){
 #endif
 void __attribute__((interrupt("machine"))) trap_handler(void){
   trap_seen++;
+#ifdef TEST_STATEFUL_CASE
+  uint32_t stateful_cause;__asm__ volatile("csrr %0,mcause":"=r"(stateful_cause));
+  stateful_trap(stateful_cause);return;
+#endif
 #ifdef TEST_ACCESS_LEGALITY
   uint32_t access_cause;
   __asm__ volatile("csrr %0,mcause":"=r"(access_cause));
@@ -131,9 +172,12 @@ void __attribute__((interrupt("machine"))) trap_handler(void){
   /* These selected APB failures are intentional probes. Advance past each
      faulting instruction so the independent result checks can complete. */
   uint32_t fault_pc;
-  __asm__ volatile("csrr %0,mepc" : "=r"(fault_pc));
-  fault_pc += 4u;
-  __asm__ volatile("csrw mepc,%0" :: "r"(fault_pc));
+  uint32_t fault_cause;__asm__ volatile("csrr %0,mcause":"=r"(fault_cause));
+  if((fault_cause&0x80000000u)==0u){
+    __asm__ volatile("csrr %0,mepc" : "=r"(fault_pc));
+    fault_pc += 4u;
+    __asm__ volatile("csrw mepc,%0" :: "r"(fault_pc));
+  }
 #endif
 #if TEST_IRQ
 #ifdef TEST_IRQ_BOTH_SOURCES
@@ -176,7 +220,13 @@ static void permission_invalidate(void){
   while((MMIO(0x40002204u)&1u)!=0u){}
 }
 #endif
+#ifdef TEST_STATEFUL_CASE
+#include "stateful_sequences.h"
+#endif
 int main(void){
+#ifdef TEST_STATEFUL_CASE
+  {uintptr_t handler=(uintptr_t)trap_handler;__asm__ volatile("csrw mtvec,%0"::"r"(handler));}
+#endif
 #ifdef TEST_MAINT_ERROR_RECOVERY
   {uintptr_t v=(uintptr_t)trap_handler;__asm__ volatile("csrw mtvec,%0"::"r"(v));}
 #endif
@@ -305,7 +355,14 @@ int main(void){
       4u
 #endif
       ;i++){
-    CHIP(0x20)=i;CHIP(0x24)=0;CHIP(0x28)=0x11111111u+i;CHIP(0x2c)=0x22222222u+i;CHIP(0x58)=3;
+    CHIP(0x20)=i;CHIP(0x24)=0;
+#if defined(TEST_STATEFUL_CASE) && (TEST_STATEFUL_CASE == 51 || TEST_STATEFUL_CASE == 88 || TEST_STATEFUL_CASE == 92)
+    CHIP(0x28)=(i&1u)?0xffffffffu:0u;
+    CHIP(0x2c)=(i&2u)?0x7ffffffeu:0x80000001u;
+#else
+    CHIP(0x28)=0x11111111u+i;CHIP(0x2c)=0x22222222u+i;
+#endif
+    CHIP(0x58)=3;
     for(volatile uint32_t settle=0;settle<8;settle++)__asm__ volatile("nop");
   }
 #ifdef TEST_CHIPLET_PARITY_FAULT
@@ -372,7 +429,16 @@ int main(void){
 #ifdef TEST_RESET_COMPLETION_IRQ
   MMIO(0x40002008u)=2u;
 #endif
+#if defined(TEST_STATEFUL_CASE) && TEST_STATEFUL_CASE == 83
+  MMIO(0x1000c000u)=13u;
+#endif
 DMA(16)=(7u<<17)|(TEST_ASID<<8)|0x35u;DMA(20)=TEST_QOS;DMA(24)=1;
+#ifdef TEST_STATEFUL_CASE
+  stateful_after_submit(&overlap_ok);
+#endif
+#if defined(TEST_M_SWEEP) && (TEST_M_SWEEP_CONTEXT == 0 || TEST_M_SWEEP_CONTEXT == 4)
+  if(!m_sweep_probe())overlap_ok=0;
+#endif
 #ifdef TEST_IRQ_WFI
   wait_for_device_irq();
 #endif
@@ -455,6 +521,12 @@ DMA(16)=(7u<<17)|(TEST_ASID<<8)|0x35u;DMA(20)=TEST_QOS;DMA(24)=1;
     DMA(16)=(7u<<17)|(TEST_ASID<<8)|(0x35u+job);DMA(24)=1;
   }
   for(volatile uint32_t hold=0;hold<1024;hold++)__asm__ volatile("nop");
+#if defined(TEST_M_SWEEP) && TEST_M_SWEEP_CONTEXT == 3
+  if(!m_sweep_probe())overlap_ok=0;
+#endif
+#ifdef TEST_M_DEPENDENCY
+  if(!m_all_opcode_probe())overlap_ok=0;
+#endif
   uint32_t pressure_front=DMA(32),pressure_tag=DMA(40);
   for(uint32_t repeat=0;repeat<8;repeat++){
     uint32_t state=DMA(28);
@@ -503,6 +575,12 @@ DMA(16)=(7u<<17)|(TEST_ASID<<8)|0x35u;DMA(20)=TEST_QOS;DMA(24)=1;
      time in the DMA read phase after the doorbell. */
   if(TEST_K>4)__asm__ volatile(".rept 7\n nop\n .endr" ::: "memory");
 CHIP(0x00)=1;
+#if defined(TEST_M_SWEEP) && TEST_M_SWEEP_CONTEXT == 1
+  if(!m_sweep_probe())overlap_ok=0;
+#endif
+#ifdef TEST_LIVE_M_OPCODE
+  if(!live_opcode_probe())overlap_ok=0;
+#endif
 #if TEST_SCENARIO_ID != 0
   /* Combined-service rows launch the scenario microprogram after AES starts,
      preserving the alignment window while still exercising RV32 during the
@@ -514,11 +592,37 @@ CHIP(0x00)=1;
   /* Exercise the integrated chiplet's real SLEEP path while its AES DMA is
      in flight, then resume before firmware checks the returned data. */
   CHIP(0xf0)=2;
-  for(volatile uint32_t sleep_wait=0;sleep_wait<24;sleep_wait++)__asm__ volatile("nop");
+#if defined(TEST_STATEFUL_CASE) && (TEST_STATEFUL_CASE == 51 || TEST_STATEFUL_CASE == 88)
+  if(!stateful_m())overlap_ok=0;
+#endif
+#if defined(TEST_M_SWEEP) && TEST_M_SWEEP_CONTEXT == 2
+  if(!m_sweep_probe())overlap_ok=0;
+#endif
+#ifdef TEST_LIVE_M_POWER
+  if(!m_all_opcode_probe())overlap_ok=0;
+#endif
+  for(volatile uint32_t sleep_wait=0;sleep_wait<
+#if defined(TEST_STATEFUL_CASE) && TEST_STATEFUL_CASE == 88
+      128u
+#else
+      24u
+#endif
+      ;sleep_wait++)__asm__ volatile("nop");
+#if TEST_STATEFUL_CASE == 92
+  for(uint32_t job=0;job<4;job++)
+    stateful_stage(0xe8u+job,INPUT_IOVA,OUTPUT_IOVA+128u+job*32u,TEST_K,1,TEST_K,0);
+  while(((DMA(28)>>7)&7u)!=4u){}
+  for(uint32_t probe=0;probe<16;probe++)if(!stateful_m())overlap_ok=0;
+#endif
   CHIP(0xf0)=0;
 #endif
 #endif
 #ifdef TEST_M_DEPENDENCY
+#ifdef TEST_LIVE_M_IRQ
+  while(!irq_seen){
+    if(m_dependency_probe(93u,3u)!=93u)overlap_ok=0;
+  }
+#endif
   #if TEST_SCENARIO_ID == 1
   if(!intent_m_address())overlap_ok=0;
   #elif TEST_SCENARIO_ID == 3
@@ -547,6 +651,11 @@ CHIP(0x00)=1;
 #endif
              );
 #endif
+#ifdef TEST_LIVE_M_IRQ
+  while(!irq_seen){
+    if(m_dependency_probe(93u,3u)!=93u)overlap_ok=0;
+  }
+#endif
   if(TEST_IRQ){wait_for_device_irq();}else while((DMA(28)&4u)==0u){}
 #ifdef TEST_TIMER_DEVICE_PRIORITY
   while(!timer_seen){}
@@ -557,6 +666,9 @@ CHIP(0x00)=1;
      A new pending event must survive the acknowledgement on that edge. */
   MMIO(0x4000200cu)=2u;
   if((MMIO(0x40002000u)&2u)==0u)overlap_ok=0;
+#endif
+#if TEST_STATEFUL_CASE == 91
+  if(DMA(36)!=0u)overlap_ok=0;
 #endif
   uint32_t c=TEST_IRQ?irq_completion:DMA(32),tag=TEST_IRQ?irq_tag:
 #ifdef TEST_COMPLETION_PUBLISH_POP
@@ -731,6 +843,9 @@ CHIP(0x00)=1;
 #endif
 #if !TEST_IRQ && !defined(TEST_COMPLETION_PUBLISH_POP) && !defined(TEST_COMPLETION_FIFO_PRESSURE) && !defined(TEST_SUBMIT_FIFO_PRESSURE) && !defined(TEST_CACHED_PERMISSION_TRANSITIONS) && !defined(TEST_ASID_ISOLATION) && !defined(TEST_REMAP_INVALIDATION)
   DMA(44)=1;
+#endif
+#ifdef TEST_STATEFUL_CASE
+  stateful_tail(&ok);
 #endif
   MMIO(0x40001fe0u)=cycle32()-benchmark_start;MMIO(0x40001ff0u)=ok?0x600d5000u:0xdead5000u;MMIO(0x40001ff4u)=1;
   for(;;)__asm__ volatile("nop");

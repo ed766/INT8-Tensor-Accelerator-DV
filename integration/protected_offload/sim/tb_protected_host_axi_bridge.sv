@@ -11,6 +11,11 @@ module tb_protected_host_axi_bridge;
   logic[1:0]awburst,arburst,bresp=0,rresp=0;
   logic[63:0]wdata,rdata=0;
   integer requests=0;
+  integer accepted_aw=0,accepted_ar=0;
+  always @(posedge clk)if(rst_n)begin
+    if(awvalid&&awready)accepted_aw++;
+    if(arvalid&&arready)accepted_ar++;
+  end
 
   protected_host_axi_bridge #(.AXI_ID(4'h3)) dut(.*);
 
@@ -20,12 +25,15 @@ module tb_protected_host_axi_bridge;
     wait(awvalid);repeat(2)@(posedge clk);awready=1;@(posedge clk);awready=0;
     wait(wvalid);repeat(2)@(posedge clk);wready=1;@(posedge clk);wready=0;
     requests++;
-    if(awid!=3 || awaddr!={addr[31:3],3'b0})$fatal(1,"write route");
+    if(awid!=3 || awaddr!={addr[31:2],2'b0})$fatal(1,"write route");
     if(addr[2] ? (wdata!={data,32'd0}||wstrb!=8'hf0) : (wdata!={32'd0,data}||wstrb!=8'h0f))$fatal(1,"write lane");
     @(negedge clk);bvalid=1;bid=3;bresp=error?2'b10:2'b00;
     @(posedge clk);@(negedge clk);bvalid=0;
     wait(pready);if(pslverr!==error)$fatal(1,"write error propagation");
-    @(posedge clk);@(negedge clk);psel=0;penable=0;pwrite=0;
+    @(posedge clk);@(negedge clk);penable=0;
+    repeat(3)begin @(negedge clk);if(awvalid||arvalid||pready)$fatal(1,"duplicate request during select bubble");end
+    $display("HOLE_EVT|module=protected_host_axi_bridge|phase=select_bubble|waits=3");
+    psel=0;pwrite=0;
     @(posedge clk);
   endtask
 
@@ -48,7 +56,7 @@ module tb_protected_host_axi_bridge;
     apb_write(32'h1000_0004,32'hcafe_f00d,0);
     apb_read(32'h3000_0000,0,32'h1122_3344);
     apb_read(32'h2000_0004,1,0);
-    if(requests!=3)$fatal(1,"duplicate or missing AXI request");
+    if(requests!=3||accepted_aw!=1||accepted_ar!=2)$fatal(1,"duplicate or missing AXI request");
     $display("PROTECTED_HOST_BRIDGE|status=PASS|requests=3|errors=1|waits=1");
     $finish;
   end

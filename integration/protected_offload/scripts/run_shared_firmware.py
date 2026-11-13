@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
-import argparse,hashlib,random,shutil,subprocess,csv,re,os,json
+import argparse,hashlib,random,shutil,subprocess,csv,re,os,json,fcntl
 from coverage_provenance import write_manifest
 from reset_evidence import phase_reached
 ROOT=Path(__file__).resolve().parents[3];BUILD=ROOT/"build/protected_offload/shared_firmware";BUILD.mkdir(parents=True,exist_ok=True)
@@ -62,6 +62,17 @@ def build(name,k,batch,asid,qos,irq,cache,negative,opt="O2",rv32m=0,seed=0,warm=
   extra_sources.append(str(scenario_source))
  isa="rv32im_zicsr" if rv32m else "rv32i_zicsr"
  scenario_define = ["-D"+macro for macro in SCENARIO_DEFINES.get(name, ())]
+ if name in stateful_rows:
+  entry=stateful_rows[name]
+  scenario_define += [f"-DTEST_STATEFUL_CASE={entry['code']}"] + ["-D"+macro for macro in entry["extra"]]
+ if name in m_permutation_rows:
+  from m_permutation_model import assembly
+  entry=m_permutation_rows[name]
+  asm=case/"m_sweep.S";asm.write_text(assembly(entry));extra_sources.append(str(asm))
+  context=("dma","dual","sleep","pressure","timing").index(entry["context"])
+  scenario_define += ["-DTEST_M_SWEEP",f"-DTEST_M_SWEEP_CONTEXT={context}"]
+  if context==2:scenario_define.append("-DTEST_CHIPLET_SLEEP_DURING")
+  if context==3:scenario_define.append("-DTEST_COMPLETION_FIFO_PRESSURE")
  firmware_timing_define = []
  if name == "queues_configuration__case_3":
   firmware_timing_define.append("-DTEST_COMPLETION_POP_DELAY=4")
@@ -122,6 +133,7 @@ def execute(spec):
  # not accidentally shifted out of phase by unrelated IRQ/backpressure
  # randomization. The remaining rows retain the full stall/IRQ sweep.
  stall_pct=0 if combined else (0,25,50,75)[seed%4]
+ if name in stateful_rows:stall_pct=stateful_rows[name]["stall"]
  if name=="interrupts__case_6":stall_pct=0
  # This seeded input-memory fault is intentionally contained before normal
  # downstream payload traffic, so backpressure would be a requested-but-
@@ -148,13 +160,16 @@ def execute(spec):
               if ns.crossover or ns.scenario else 0)
  case,elf,cpu_stream_hash,cpu_stream_range,scenario_program_hash,scenario_program_range,scenario_activation_address=build(name,k,batch,asid,qos,irq,cache,negative,opt,rv32m,seed,warm,combined,fault,cpu_stream_seed,artifact_name,scenario_id)
  build_id=source_build_fingerprint(elf, combined)
- scenario_macros=SCENARIO_DEFINES
+ scenario_macros=dict(SCENARIO_DEFINES)
+ if name in stateful_rows:
+  scenario_macros[name]=(*scenario_macros.get(name,()),*(macro for macro in stateful_rows[name]["extra"] if macro=="TEST_FABRIC_CONTENDER"))
  scenario_define="_".join(scenario_macros.get(name,()))
  rtl_sources=sources+(chiplet_sources if combined else [])
  rtl_fingerprint=hashlib.sha256(simulator_version.encode()+b"".join(path.read_bytes() for path in rtl_sources)).hexdigest()
  setup_pready_high=ns.setup_pready_high or name=="apb_axi__case_1"
  completion_pop_wait=(5 if name=="seed_099" else
                       4 if name=="queues_configuration__case_3" else 0)
+ if name in stateful_rows:completion_pop_wait=stateful_rows[name].get("pop_wait",0)
  key=(cache,rv32m,define,scenario_define,combined,completion_pop_wait,ns.code_coverage,setup_pready_high,rtl_fingerprint)
  obj=BUILD/(f"obj_c{cache}_m{rv32m}_{define or scenario_define or 'nominal'}_h{combined}_popwait{completion_pop_wait}_cov{int(ns.code_coverage)}_p{int(ns.setup_pready_high)}_{rtl_fingerprint[:10]}")
  if key not in compiled:
@@ -186,7 +201,13 @@ def execute(spec):
    main_cpp=obj/"coverage_main.cpp"
    main_cpp.write_text("\n".join(["#include <cstdlib>", '#include "verilated.h"', '#include "verilated_cov.h"', '#include "Vtb_rv32_protected_shared.h"', "int main(int argc,char** argv){", "VerilatedContext context; context.commandArgs(argc,argv);", "Vtb_rv32_protected_shared dut(&context);", "while(!context.gotFinish()){dut.eval();context.timeInc(1);}", "dut.final();const char* p=std::getenv(\"VERILATOR_COVERAGE_FILENAME\");VerilatedCov::write(p?p:\"coverage.dat\");return 0;", "}", ""]))
    extra_main=[str(main_cpp)]
-  subprocess.run(compile_cmd+list(map(str,rtl_sources))+extra_main,cwd=ROOT,check=True,stdout=subprocess.DEVNULL);compiled.add(key)
+  # Independent regression lanes may elaborate the same parameter tuple.
+  # Serialize generation/build so one Verilator process cannot replace PCH
+  # or C++ files while another make invocation is reading them.
+  with (obj/"build.lock").open("w") as build_lock:
+   fcntl.flock(build_lock,fcntl.LOCK_EX)
+   subprocess.run(compile_cmd+list(map(str,rtl_sources))+extra_main,cwd=ROOT,check=True,stdout=subprocess.DEVNULL)
+  compiled.add(key)
  partial_retry = fault == "TEST_PARTIAL_OUTPUT_RETRY"
  trace=case/"crossover.trace"
  stall_seed=ns.stall_seed if ns.stall_seed is not None else seed+1
@@ -195,7 +216,13 @@ def execute(spec):
   # fixed schedule is part of the scenario definition, not a claimed random
   # coverage point.
   stall_seed=1022
- run_args=[str(obj/"Vtb_rv32_protected_shared"),f"+RUN_ID={name}",f"+SOURCE_BUILD_ID={build_id}",f"+FIRMWARE_HEX={case/'firmware.hex'}",f"+DATA_HEX={case/'data.hex'}",f"+EXPECT_K={k}",f"+EXPECT_BATCH={batch}",f"+AXI_STALL_PCT={stall_pct}",f"+AXI_STALL_SEED={stall_seed}",f"+CROSS_TRACE={trace}"]+( ["+EXPECT_DOUBLE_SUBMIT=1"] if "TEST_COMPLETION_PUBLISH_POP" in scenario_define else [])+( ["+CROSS_TRACE_FLUSH"] if define else [])
+ run_args=[str(obj/"Vtb_rv32_protected_shared"),f"+RUN_ID={name}",f"+SOURCE_BUILD_ID={build_id}",f"+FIRMWARE_HEX={case/'firmware.hex'}",f"+DATA_HEX={case/'data.hex'}",f"+EXPECT_K={k}",f"+EXPECT_BATCH={batch}",f"+AXI_STALL_PCT={stall_pct}",f"+AXI_STALL_SEED={stall_seed}",f"+CROSS_TRACE={trace}"]+( ["+EXPECT_DOUBLE_SUBMIT=1"] if "TEST_COMPLETION_PUBLISH_POP" in scenario_define else [])+( ["+CROSS_TRACE_FLUSH"] if define or name in stateful_rows else [])
+ if name in m_permutation_rows and m_permutation_rows[name]["context"]=="timing":
+  run_args.append(f"+AXI_B_DELAY={m_permutation_rows[name]['delay']}")
+ if name in stateful_rows:
+  entry=stateful_rows[name]
+  run_args += [f"+AXI_B_DELAY={entry['b_delay']}",f"+AXI_R_DELAY={entry['r_delay']}"]
+  if entry["code"]==41:run_args += ["+AXI_FAIL_WRITE_ADDR=10006000","+AXI_FAIL_WRITE_COUNT=1"]
  if reset_phase=="host_w_wait":
   run_args.append("+AXI_W_READY_DELAY=64")
  if reset_phase=="prolonged_backpressure":run_args.append("+AXI_W_READY_DELAY=256")
@@ -223,9 +250,9 @@ def execute(spec):
  text=run.stdout+run.stderr;line=next((x for x in run.stdout.splitlines() if x.startswith("PROTECTED_SHARED|")),"")
  if ns.code_coverage and (case/"integration_coverage.dat").is_file() and trace.is_file():
   write_manifest(ROOT,case,rtl_sources,simulator_version,build_id,name,run.returncode)
- if define:
+ if define or negative=="NEG_STALE_OWNERSHIP":
   (case/"simulation.log").write_text(text)
- expected=(run.returncode!=0) if define else ("OWNERSHIP_VIOLATION" in text) if negative=="NEG_ACCESS_DURING" else ("firmware result" in text) if negative else (run.returncode==0 and "status=PASS" in line)
+ expected=(run.returncode!=0) if define else ("OWNERSHIP_VIOLATION" in text) if negative in ("NEG_ACCESS_DURING","NEG_STALE_OWNERSHIP") else ("firmware result" in text) if negative else (run.returncode==0 and "status=PASS" in line)
  mutation_qualification="not_applicable"
  if define:
   try:
@@ -233,7 +260,12 @@ def execute(spec):
    trace_events=parse_events(trace)
   except (OSError,ValueError):
    trace_events=[]
-  if define=="PROTECTED_MUT_FALSE_MAINTENANCE":
+  if define in ("PROTECTED_MUT_RETIRE_REFERENCE_RELEASE","CACHE_BUG_DIRTY_SKIP") or (define=="PROTECTED_MUT_STALE_TRANSLATION" and name=="stateful_read_permission_downgrade"):
+   from run_gap_mutations import diagnose
+   witnesses,diagnostics=diagnose(trace_events,define)
+   qualified=bool(witnesses and diagnostics)
+   mutation_qualification=diagnostics[0].split(":",1)[0] if qualified else "unqualified"
+  elif define=="PROTECTED_MUT_FALSE_MAINTENANCE":
    bypass=[e for e in trace_events if e.get("kind")=="APB" and e.get("write")=="1" and e.get("addr")=="40002104" and e.get("wait_cycles")=="0"]
    starts=[e for e in trace_events if e.get("kind")=="MAINT_START"]
    qualified=run.returncode!=0 and "firmware result" in text and len(bypass)>=2 and not starts
@@ -264,7 +296,7 @@ def execute(spec):
   elif define=="RV32_BUG_M_STALE_RESET":
    reset=next((e for e in trace_events if e.get("kind")=="RESET_ASSERT" and e.get("muldiv_busy")=="1"),None)
    released=[e for e in trace_events if e.get("kind")=="RESET_RELEASE" and reset and int(e.get("epoch","0"))==int(reset.get("epoch","-1"))]
-   qualified=run.returncode!=0 and reset is not None and bool(released)
+   qualified=run.returncode!=0 and reset is not None and "a_no_stale_muldiv_result_after_reset" in text
    mutation_qualification="stale_muldiv_state_survived_reset_epoch" if qualified else "unqualified"
   elif define=="RV32_BUG_DUP_APB_COMPLETION":
    retires=[e for e in trace_events if e.get("kind")=="RETIRE" and
@@ -504,11 +536,15 @@ def execute(spec):
  if FIRMWARE_IMPLEMENTATION=="independent":
   stimulus_origin="independent_firmware_driver"
   stimulus_generator=FIRMWARE_SOURCE
+ if name in stateful_rows:
+  stimulus_origin="seeded_multi_job_firmware" if stateful_rows[name]["code"]==80 else "stateful_directed_firmware"
+  stimulus_generator=ROOT/"integration/protected_offload/scripts/stateful_cases.py"
  stimulus_instance = json.dumps({"origin": stimulus_origin, "seed": seed,
      "cpu_stream_seed": cpu_stream_seed, "scenario_id": scenario_id,
      "k": k, "batch": batch, "asid": asid, "qos": qos, "irq": irq,
      "cache": cache, "combined": combined, "stall_pct": stall_pct,
-     "fault": fault or "none", "reset_phase": reset_phase}, sort_keys=True)
+     "fault": fault or "none", "reset_phase": reset_phase,
+     "stateful_knobs": stateful_rows.get(name, {})}, sort_keys=True)
  return {"scenario":name,"family":name.split("__",1)[0],"status":status,"seed":seed,"axi_stall_seed":stall_seed,"optimizer":opt,"isa":"rv32im_zicsr" if rv32m else "rv32i_zicsr","k":k,"batch":batch,"mode":"warm" if warm else "cold","asid":asid,"qos":qos,"completion_mode":"irq" if irq else "poll","cache":cache,"combined_host":combined,"schedule_class":schedule_class,"stimulus_origin":stimulus_origin,"stimulus_generator_sha256":hashlib.sha256(stimulus_generator.read_bytes()).hexdigest(),"stimulus_instance_sha256":hashlib.sha256(stimulus_instance.encode()).hexdigest(),"stimulus_abi_status":"PASS" if cpu_stream_seed is not None and status=="PASS" else "FAIL" if cpu_stream_seed is not None else "NOT_APPLICABLE","reset_at":reset_at,"requested_reset_phase":reset_phase,"reset_phase":reset_evidence,"requested_fault_mode":fault or "none","fault_mode":fault or "none","expected_negative":negative or "none","mutation_qualification":mutation_qualification,"mutation_exit_code":run.returncode if define else "","requested_axi_stall_percent":stall_pct,"requested_completion_pop_wait_cycles":completion_pop_wait,"realized_completion_pop_wait_cycles":pop_wait_realized,"realized_axi_wait_events":realized_axi_waits,"realized_irq_events":realized_irq_events,"realized_interrupt_retires":realized_interrupt_retires,"realized_m_retires":realized_m_retires,"realized_translation_faults":realized_faults,"realized_reset_epochs":realized_reset_epochs,"realized_ptw_reads":sum(event.get("kind")=="PTW_REQ" for event in trace_events),"realized_memory_writes":sum(event.get("kind")=="MEM_RSP" and event.get("write")=="1" and event.get("committed")=="1" for event in trace_events),"realized_error_responses":sum((event.get("kind")=="MEM_RSP" and event.get("error")=="1") or (event.get("kind")=="XLATE_RSP" and event.get("fault","0")!="0") for event in trace_events),"realized_completion_events":sum(event.get("kind")=="COMPLETE" for event in trace_events),"realized_service_overlap_events":realized_service_overlap,"cpu_stream_seed":cpu_stream_seed if cpu_stream_seed is not None else "","cpu_stream_source_sha256":cpu_stream_hash,"cpu_stream_start_pc":f"{cpu_stream_range[0]:08x}" if cpu_stream_range else "","cpu_stream_end_pc":f"{cpu_stream_range[1]:08x}" if cpu_stream_range else "","realized_cpu_stream_retirements":len(stream_retires),"realized_m_dma_overlap_events":stream_m_dma_overlap,"realized_m_nonzero_operand_ops":stream_m_nonzero_operands,"realized_branch_taken":stream_branch_taken,"realized_branch_not_taken":stream_branch_not_taken,"realized_shift_0":stream_shift_0,"realized_shift_1":stream_shift_1,"realized_shift_31":stream_shift_31,"mul_retirements":stream_opcode_counts[0],"mulh_retirements":stream_opcode_counts[1],"mulhsu_retirements":stream_opcode_counts[2],"mulhu_retirements":stream_opcode_counts[3],"div_retirements":stream_opcode_counts[4],"divu_retirements":stream_opcode_counts[5],"rem_retirements":stream_opcode_counts[6],"remu_retirements":stream_opcode_counts[7],"scenario_program_source_sha256":scenario_program_hash,"scenario_program_trace_sha256":scenario_program_trace_hash,"scenario_program_start_pc":f"{scenario_program_range[0]:08x}" if scenario_program_range else "","scenario_program_end_pc":f"{scenario_program_range[1]:08x}" if scenario_program_range else "","scenario_program_retirements":len(scenario_retires),"scenario_program_rw_event_count":scenario_program_rw_count,"scenario_program_witness_event_ids":scenario_program_event_ids,"scenario_activation_address":scenario_activation_address,"cycles":cycles,"benchmark_cycles":measured,"elf_sha256":hashlib.sha256(elf.read_bytes()).hexdigest(),"source_build_id":build_id,"trace":str(trace.relative_to(ROOT)),"trace_sha256":hashlib.sha256(trace.read_bytes()).hexdigest() if trace.is_file() else "","evidence":line or ("detected:"+negative if expected else "")}
 matrix=[(f"k{k}_b{b}_a{a}_q{q}",k,b,a,q,int(q==15),0,"") for k in (4,8,16,32) for b in (1,4) for a in (1,17) for q in (0,15)]
 cached=[(f"cache_k{k}_b{b}_q{q}",k,b,1,q,int(q==15),1,"") for k in (4,16) for b in (1,4) for q in (0,15)]
@@ -645,7 +681,35 @@ crossover_rows[6*6+3]=("combined_services__case_4",16,4,1,8,0,0,"","O2",0,1063,0
 # READY low, then assert reset from the event-triggered reset driver.
 crossover_rows[1*6+5]=(*crossover_rows[1*6+5][:15],"host_w_wait")
 parser=argparse.ArgumentParser();parser.add_argument("--matrix",action="store_true");parser.add_argument("--cache",action="store_true");parser.add_argument("--negative",action="store_true");parser.add_argument("--compiler",action="store_true");parser.add_argument("--random",action="store_true");parser.add_argument("--cpu-random",action="store_true",help="run generated RV32IM streams during active DMA");parser.add_argument("--count",type=int,default=100);parser.add_argument("--seed",type=int,action="append",default=[],help="restrict --random to selected seed(s), for focused schedule debug");parser.add_argument("--stall-seed",type=int,default=None,help="override deterministic AXI target backpressure seed for a focused schedule debug");parser.add_argument("--axi-b-delay",type=int,default=None,help="override target B-response delay for focused timing debug");parser.add_argument("--benchmark",action="store_true");parser.add_argument("--combined",action="store_true");parser.add_argument("--error-reset",action="store_true");parser.add_argument("--error",action="store_true");parser.add_argument("--crossover",action="store_true");parser.add_argument("--scenario",default="",help="run one named directed crossover scenario");parser.add_argument("--schema3-smoke",action="store_true",help="run a unique uncached observer/replay smoke without overwriting canonical reports");parser.add_argument("--schema3-cache-smoke",action="store_true",help="run a unique cache-enabled observer/replay smoke without overwriting canonical reports");parser.add_argument("--coverage-edges",action="store_true",help="run APB decoder/error branches intended for code coverage");parser.add_argument("--model",action="store_true");parser.add_argument("--code-coverage",action="store_true",help="instrument the integrated top and dump Verilator coverage");parser.add_argument("--define",default="");parser.add_argument("--reset-phase-override",default="",help="event-triggered reset phase override for focused mutation tests");parser.add_argument("--setup-pready-high",action="store_true",help="make the integration target advertise PREADY in APB setup for protocol stress");ns=parser.parse_args()
-if ns.scenario:
+live_m = os.environ.get("PROTECTED_LIVE_M", "")
+m_permutation_family=os.environ.get("PROTECTED_M_SWEEP","")
+m_permutation_rows={}
+stateful_family=os.environ.get("PROTECTED_STATEFUL","")
+stateful_rows={}
+if stateful_family:
+ from stateful_cases import cases as stateful_cases,random_cases,ownership_negative_case
+ selected=[ownership_negative_case(stateful_family)] if stateful_family in ("stateful_stale_mapping_owned_page","stateful_alias_owned_line","stateful_handler_owned_line") else random_cases() if stateful_family=="random" or stateful_family.startswith("stateful_random_") else stateful_cases()
+ if stateful_family!="all":selected=[r for r in selected if r["family"]==stateful_family or r["name"]==stateful_family]
+ if not selected:raise SystemExit("unknown stateful family/test")
+ stateful_rows={r["name"]:r for r in selected};specs=[r["spec"] for r in selected]
+elif m_permutation_family:
+ from m_permutation_model import cases
+ selected=cases(m_permutation_family)
+ limit=int(os.environ.get("PROTECTED_M_SWEEP_LIMIT","0"))
+ if limit:selected=selected[:limit]
+ m_permutation_rows={row["name"]:row for row in selected}
+ specs=[row["spec"] for row in selected]
+elif live_m:
+ if live_m not in {"dual", "sleep", "irq", "dma", "pressure", *(f"dual_{i}" for i in range(8))}:
+  raise SystemExit("PROTECTED_LIVE_M must be dual, sleep, irq, or dma")
+ specs=[("live_m_"+live_m,64,4,1,8,int(live_m=="irq"),0,"","O2",1,9100,0,int(live_m in {"dual","sleep"} or live_m.startswith("dual_")),-1,"","none")]
+ if live_m.startswith("dual_"):SCENARIO_DEFINES["live_m_"+live_m]=(f"TEST_LIVE_M_OPCODE={live_m[-1]}",)
+ if live_m=="sleep":SCENARIO_DEFINES["live_m_sleep"]=("TEST_CHIPLET_SLEEP_DURING","TEST_LIVE_M_POWER")
+ if live_m=="irq":SCENARIO_DEFINES["live_m_irq"]=("TEST_LIVE_M_IRQ",)
+ if live_m=="pressure":
+  specs=[("live_m_pressure",4,1,1,8,0,0,"","O2",1,9100,0,0,-1,"","none")]
+  SCENARIO_DEFINES["live_m_pressure"]=("TEST_COMPLETION_FIFO_PRESSURE",)
+elif ns.scenario:
  specs=[row for row in crossover_rows if row[0]==ns.scenario or row[0].split("__",1)[0]==ns.scenario]
  if not specs:raise SystemExit(f"unknown crossover scenario: {ns.scenario}")
 elif ns.schema3_smoke:
@@ -778,9 +842,14 @@ if ns.schema3_cache_smoke:report=ROOT/"reports/compute_crossover_schema3_cache_s
 if ns.define:report=ROOT/("reports/integration_mutation_"+ns.define.lower()+".csv")
 if FIRMWARE_IMPLEMENTATION=="independent":report=ROOT/"reports/compute_crossover_independent.csv"
 if ns.code_coverage:report=ROOT/"reports/compute_crossover_code_coverage_runs.csv"
+if live_m:report=ROOT/f"reports/compute_live_m_{live_m}.csv"
+if m_permutation_family:report=ROOT/f"reports/compute_m_permutation_{m_permutation_family}_runs.csv"
+if stateful_family:report=ROOT/f"reports/compute_stateful_{stateful_family}_runs.csv"
+if stateful_family and ns.code_coverage:report=ROOT/f"reports/compute_stateful_{stateful_family}_coverage_runs.csv"
+if stateful_family and ns.define:report=ROOT/f"reports/compute_stateful_mutation_{ns.define.lower()}.csv"
 with report.open("w",newline="") as h:w=csv.DictWriter(h,fieldnames=rows[0],lineterminator="\n");w.writeheader();w.writerows(rows)
 if ns.code_coverage:
- lane_report=ROOT/f"reports/compute_crossover_coverage_runs_{coverage_lane}.csv"
+ lane_report=ROOT/f"reports/compute_stateful_{stateful_family}_coverage_runs.csv" if stateful_family else ROOT/f"reports/compute_crossover_coverage_runs_{coverage_lane}.csv"
  with lane_report.open("w",newline="") as h:w=csv.DictWriter(h,fieldnames=rows[0],lineterminator="\n");w.writeheader();w.writerows(rows)
 if ns.code_coverage and ns.coverage_edges:
  edge_report=ROOT/"reports/compute_crossover_apb_edge_coverage_run.csv"
@@ -793,13 +862,16 @@ if ns.model:
  model_report=ROOT/("reports/rv32m_instruction_stream_random_model.csv" if ns.cpu_random else "reports/compute_crossover_model.csv" if ns.crossover else "reports/compute_crossover_scenario_model.csv" if ns.scenario else "reports/compute_crossover_schema3_smoke_model.csv" if ns.schema3_smoke else "reports/compute_crossover_schema3_cache_smoke_model.csv" if ns.schema3_cache_smoke else "reports/compute_crossover_random_debug_model.csv" if ns.random and ns.seed else "reports/compute_crossover_random_model.csv" if ns.random else "reports/protected_shared_model.csv")
  if ns.code_coverage:model_report=ROOT/f"reports/compute_crossover_coverage_model_{coverage_lane}.csv"
  if FIRMWARE_IMPLEMENTATION=="independent":model_report=ROOT/"reports/compute_crossover_independent_model.csv"
+ if live_m:model_report=ROOT/f"reports/compute_live_m_{live_m}_model.csv"
+ if m_permutation_family:model_report=ROOT/f"reports/compute_m_permutation_{m_permutation_family}_model.csv"
+ if stateful_family:model_report=ROOT/f"reports/compute_stateful_{stateful_family}_model.csv"
  model_cmd=["python3",str(ROOT/"integration/protected_offload/scripts/check_crossover_trace.py"),"--strict-schema","--report",str(model_report)]+[str(ROOT/r["trace"]) for r in rows]
  model_result=subprocess.run(model_cmd,cwd=ROOT,check=False)
  # Bind replay results to the exact simulation row.  The trace checker owns
  # functional correctness; this join owns stimulus provenance and realized
  # knob accounting.  A replay row without its originating run metadata cannot
  # satisfy seeded-closure requirements.
- if ns.model and (ns.crossover or ns.scenario or ns.schema3_smoke or ns.schema3_cache_smoke or ns.random or ns.cpu_random or FIRMWARE_IMPLEMENTATION=="independent"):
+ if ns.model and (ns.crossover or ns.scenario or ns.schema3_smoke or ns.schema3_cache_smoke or ns.random or ns.cpu_random or stateful_family or live_m or m_permutation_family or FIRMWARE_IMPLEMENTATION=="independent"):
   with model_report.open(newline="") as handle:
    replay_rows=list(csv.DictReader(handle))
   # The model report stores paths relative to each case directory while the
@@ -845,4 +917,4 @@ if ns.model:
     writer=csv.DictWriter(handle,fieldnames=fields,lineterminator="\n")
     writer.writeheader();writer.writerows(rows)
    passed=sum(r["status"]=="PASS" for r in rows)
-print(f"Protected shared firmware: {passed} / {len(rows)} PASS");raise SystemExit(passed!=len(rows))
+print(f"Protected shared firmware: {passed} / {len(rows)} PASS");raise SystemExit(passed!=len(rows) or (ns.model and model_result.returncode != 0 and not ns.define))

@@ -1,0 +1,2 @@
+scenario,family,status,evidence,witness_count,event_ids,trace,trace_sha256,errors
+stateful_reset_multiple_owners,end_to_end,PASS,actual_RTL_and_independent_replay,19,1142;1186;1200;1192;8573;8617;8631;8623;14790;15140;15166;15145;15148;14916;15183;15209;15188;15191;7428,build/protected_offload/shared_firmware/stateful_reset_multiple_owners/crossover.trace,b33cf1d8d939ebe1c2e62c6906fbdfdfbc6a017f6968ed584698d1415d06bb1c,

@@ -56,6 +56,20 @@ module rv32_protected_shared_top #(
   // input/output spans, including non-contiguous pages.
   logic [31:0] ownership_pte_shadow [0:16383] = '{default:32'b0};
   logic [31:0] ownership_aw_addr_q;
+  logic [31:0] ownership_pages [256][2][64];
+  logic [31:0] ownership_iova_start [256][2];
+  logic ownership_xlate_pending,ownership_xlate_write;
+  logic [31:0] ownership_xlate_iova;
+  logic [7:0] ownership_xlate_tag;
+  typedef struct packed {
+    logic [31:0] input_iova,output_iova;
+    logic [15:0] input_stride,output_stride;
+    logic [6:0] k,batch;
+    logic [7:0] tag,asid;
+    logic bank;
+    logic [7:0] bank_gen;
+    logic [3:0] qos;
+  } ownership_descriptor_t;
 `endif
   logic chip_ready,chip_bridge_ready,chip_power_sel,chip_cfg_ready,chip_irq,chip_busy,chip_done,chip_error;logic[1:0]chip_power_state;logic[31:0]chip_bridge_rdata;logic[15:0]chip_tag;logic[63:0]chip_plaintext,chip_ciphertext,chip_die_b_ciphertext;logic chip_plaintext_valid,chip_ciphertext_valid,chip_die_b_ciphertext_valid;logic[63:0]chip_plaintext_data,chip_ciphertext_data,chip_die_b_ciphertext_data;logic chip_crypto_error,chip_irq_monitor;logic chip_cfg_valid,chip_cfg_write;logic[7:0]chip_cfg_addr;logic[31:0]chip_cfg_wdata,chip_cfg_rdata;logic timer_irq;logic[63:0]timer_mtime,timer_mtimecmp;
   logic cache_data_sel,uncached_ext_sel;logic[31:0]direct_rdata;logic direct_ready,direct_error;
@@ -78,12 +92,25 @@ module rv32_protected_shared_top #(
   // Translate using the same firmware-authored root/leaf PTEs that the DMA
   // page walker sees.  This is verification-only shadow state; it avoids
   // assuming a linear IOVA-to-PA mapping in the ownership checker.
-  function automatic logic [31:0] iova_to_phys(input logic [31:0] iova);
+  function automatic logic [31:0] iova_to_phys(input logic [31:0] iova,input logic [7:0] asid);
     logic [31:0] root_pte,leaf_pte,leaf_base;
     logic [13:0] root_index,leaf_index;
+    // TLB mappings remain effective until eviction/invalidation. The
+    // independent trace model separately checks their architectural legality.
+    for(int ti=0;ti<$size(svc.iommu.tlb_valid);ti++) begin
+      if(svc.iommu.tlb_valid[ti] && svc.iommu.tlb_asid[ti]==asid &&
+         svc.iommu.tlb_vpn1[ti]==iova[31:22] &&
+         (svc.iommu.tlb_superpage[ti] || svc.iommu.tlb_vpn0[ti]==iova[21:12]))
+        return svc.iommu.tlb_superpage[ti] ? {svc.iommu.tlb_ppn[ti][19:10],iova[21:0]} :
+                                           {svc.iommu.tlb_ppn[ti][19:0],iova[11:0]};
+    end
     root_index = 14'((iova >> 22) & 32'h0000_03ff);
     root_pte = ownership_pte_shadow[root_index];
     if (!root_pte[0] || root_pte[31:30] != 0) return 32'b0;
+    if(root_pte[1] || root_pte[3]) begin
+      if(root_pte[19:10]!=0)return 32'b0;
+      return {root_pte[29:20],iova[21:0]};
+    end
     leaf_base = {root_pte[29:10],12'b0};
     if (leaf_base < 32'h3000_0000 || leaf_base >= 32'h3001_0000) return 32'b0;
     leaf_index = 14'(((leaf_base - 32'h3000_0000) >> 2) + ((iova >> 12) & 32'h0000_03ff));
@@ -93,7 +120,8 @@ module rv32_protected_shared_top #(
   endfunction
   function automatic logic owned_physical_access(input logic [31:0] start_iova,
                                                   input logic [31:0] end_iova,
-                                                  input logic [31:0] physical_addr);
+                                                  input logic [31:0] physical_addr,
+                                                  input logic [7:0] tag,input logic is_output);
     logic [31:0] page_iova,physical_page,physical_low,physical_high;
     logic [31:0] final_page;
     owned_physical_access = 1'b0;
@@ -101,7 +129,7 @@ module rv32_protected_shared_top #(
     for (int page=0; page<64; page++) begin
       page_iova = {start_iova[31:12],12'b0} + (32'(page) << 12);
       if (page_iova <= final_page) begin
-        physical_page = iova_to_phys(page_iova);
+        physical_page = ownership_pages[tag][is_output][page];
         if (physical_page != 0) begin
           physical_low = physical_page + ((page == 0) ? {20'b0,start_iova[11:0]} : 32'b0);
           physical_high = physical_page + ((page_iova == final_page) ? {20'b0,end_iova[11:0]} : 32'hfff);
@@ -111,6 +139,54 @@ module rv32_protected_shared_top #(
       end
     end
   endfunction
+  always @(posedge clk) begin:ownership_mapping_lifetime
+    logic [31:0] first_page,last_address,page_address;
+    int page_slot;
+    if(!rst_n)begin
+      ownership_xlate_pending=1'b0;
+      ownership_xlate_write=1'b0;
+      ownership_xlate_iova='0;
+      ownership_xlate_tag='0;
+      for(int tag=0;tag<256;tag++)for(int direction=0;direction<2;direction++)begin
+        ownership_iova_start[tag][direction]='0;
+        for(int page=0;page<64;page++)ownership_pages[tag][direction][page]='0;
+      end
+    end else begin
+      if(svc.dma.submit_push)begin
+        for(int direction=0;direction<2;direction++)begin
+          first_page=direction!=0 ? svc.submit_output_iova : svc.submit_input_iova;
+          last_address=first_page+(32'(svc.submit_batch)-1)*
+                       (direction!=0 ? 32'(svc.submit_output_stride) : 32'(svc.submit_input_stride))+
+                       (direction!=0 ? 32'd3 : 32'(svc.submit_k)-1);
+          first_page={first_page[31:12],12'b0};
+          ownership_iova_start[svc.submit_tag][direction]=first_page;
+          for(int page=0;page<64;page++)begin
+            page_address=first_page+(32'(page)<<12);
+            ownership_pages[svc.submit_tag][direction][page]=page_address<=last_address ?
+              (iova_to_phys(page_address,svc.submit_asid)&32'hffff_f000) : 32'b0;
+          end
+        end
+      end
+      // Request outputs need not remain meaningful after acceptance. Retain the
+      // identity/direction until the corresponding translation response.
+      if(svc.xlate_req_valid&&svc.xlate_req_ready)begin
+        if(ownership_xlate_pending)$fatal(1,"ownership translation request overlap");
+        ownership_xlate_pending=1'b1;
+        ownership_xlate_write=svc.xlate_req_write;
+        ownership_xlate_iova=svc.xlate_req_iova;
+        ownership_xlate_tag=svc.dma.active.tag;
+      end
+      if(svc.xlate_rsp_valid&&svc.xlate_rsp_ready)begin
+        if(!ownership_xlate_pending)$fatal(1,"ownership translation response without request");
+        if(svc.xlate_rsp_fault==0)begin
+          page_slot=int'((ownership_xlate_iova-ownership_iova_start[ownership_xlate_tag][ownership_xlate_write])>>12);
+          if(page_slot<0||page_slot>=64)$fatal(1,"ownership translation outside captured descriptor");
+          ownership_pages[ownership_xlate_tag][ownership_xlate_write][page_slot]={svc.xlate_rsp_paddr[31:12],12'b0};
+        end
+        ownership_xlate_pending=1'b0;
+      end
+    end
+  end
   always_ff @(posedge clk) begin
     if (!rst_n) begin
       ownership_aw_addr_q <= 32'b0;
@@ -226,9 +302,35 @@ module rv32_protected_shared_top #(
   always_ff @(posedge clk or negedge rst_n)begin if(!rst_n)begin firmware_done<=0;firmware_result<=0;cycles<=0;benchmark_cycles<=0;end else begin cycles<=cycles+1;if(mail_sel&&penable&&pwrite)begin if(paddr[4:0]==0)benchmark_cycles<=pwdata;else if(paddr[3:0]==0)firmware_result<=pwdata;else if(paddr[3:0]==4)firmware_done<=pwdata[0];end end end
 
   generate if(!USE_CACHE)begin:uncached_host
+   assign cache_req_addr=32'b0;
    protected_host_axi_bridge #(.AXI_ID(0)) host(.clk,.rst_n,.psel(host_sel),.penable,.pwrite,.paddr,.pwdata,.prdata(host_rdata),.pready(host_ready),.pslverr(host_error),.awvalid(s_awvalid[0]),.awready(s_awready[0]),.awid(s_awid[0]),.awaddr(s_awaddr[0]),.awlen(s_awlen[0]),.awsize(s_awsize[0]),.awburst(s_awburst[0]),.awprot(s_awprot[0]),.awqos(s_awqos[0]),.wvalid(s_wvalid[0]),.wready(s_wready[0]),.wdata(s_wdata[0]),.wstrb(s_wstrb[0]),.wlast(s_wlast[0]),.bvalid(s_bvalid[0]),.bready(s_bready[0]),.bid(s_bid[0]),.bresp(s_bresp[0]),.arvalid(s_arvalid[0]),.arready(s_arready[0]),.arid(s_arid[0]),.araddr(s_araddr[0]),.arlen(s_arlen[0]),.arsize(s_arsize[0]),.arburst(s_arburst[0]),.arprot(s_arprot[0]),.arqos(s_arqos[0]),.rvalid(s_rvalid[0]),.rready(s_rready[0]),.rid(s_rid[0]),.rdata(s_rdata[0]),.rresp(s_rresp[0]),.rlast(s_rlast[0]));
    assign maint_ready=0;assign maint_busy=0;assign maint_done=maint_valid;assign maint_error=0;assign cache_state=0;assign cache_hit=0;assign cache_miss=0;assign cache_evict=0;assign refill_beat=0;assign writeback_beat=0;
-   assign s_awvalid[3]=0;assign s_awid[3]=0;assign s_awaddr[3]=0;assign s_awlen[3]=0;assign s_awsize[3]=0;assign s_awburst[3]=0;assign s_awprot[3]=0;assign s_awqos[3]=0;assign s_wvalid[3]=0;assign s_wdata[3]=0;assign s_wstrb[3]=0;assign s_wlast[3]=0;assign s_bready[3]=1;assign s_arvalid[3]=0;assign s_arid[3]=0;assign s_araddr[3]=0;assign s_arlen[3]=0;assign s_arsize[3]=0;assign s_arburst[3]=0;assign s_arprot[3]=0;assign s_arqos[3]=0;assign s_rready[3]=1;
+   assign s_awvalid[3]=0;assign s_awid[3]=0;assign s_awaddr[3]=0;assign s_awlen[3]=0;assign s_awsize[3]=0;assign s_awburst[3]=0;assign s_awprot[3]=0;assign s_awqos[3]=0;assign s_wvalid[3]=0;assign s_wdata[3]=0;assign s_wstrb[3]=0;assign s_wlast[3]=0;assign s_bready[3]=1;
+`ifdef TEST_FABRIC_CONTENDER
+   // Verification-only legal master. Four distinct IDs permit sustained
+   // arbitration opportunities; each ID remains owned through RLAST.
+   logic contender_valid;logic [3:0] contender_pending;logic [1:0] contender_id;
+   assign s_arvalid[3]=contender_valid;assign s_arid[3]={2'b0,contender_id};assign s_araddr[3]=32'h1000_f000;
+   assign s_arlen[3]=0;assign s_arsize[3]=3;assign s_arburst[3]=1;
+   assign s_arprot[3]=0;assign s_arqos[3]=15;assign s_rready[3]=1;
+   always_ff @(posedge clk or negedge rst_n)begin
+     if(!rst_n)begin contender_valid<=0;contender_pending<=0;contender_id<=0;end
+     else begin
+       if(busy&&!contender_valid)contender_valid<=1;
+       if(s_arvalid[3]&&s_arready[3])begin
+         if(contender_pending[contender_id])$fatal(1,"CONTENDER_DUPLICATE_ID");
+         contender_valid<=busy;contender_pending[contender_id]<=1;contender_id<=contender_id+1'b1;
+       end
+       if(s_rvalid[3]&&s_rready[3])begin
+         if(s_rid[3]>3||!contender_pending[s_rid[3][1:0]]||!s_rlast[3]||s_rresp[3]!=0||s_rdata[3]!=0)
+           $fatal(1,"CONTENDER_RESPONSE_MISMATCH");
+         contender_pending[s_rid[3][1:0]]<=0;
+       end
+     end
+   end
+`else
+   assign s_arvalid[3]=0;assign s_arid[3]=0;assign s_araddr[3]=0;assign s_arlen[3]=0;assign s_arsize[3]=0;assign s_arburst[3]=0;assign s_arprot[3]=0;assign s_arqos[3]=0;assign s_rready[3]=1;
+`endif
   end else begin:cached_host
    logic[31:0]cache_rdata;logic cache_ready_apb,cache_error_apb;
    protected_apb_cache_bridge cb(.clk,.rst_n,.psel(cache_data_sel),.penable,.pwrite,.paddr,.pwdata,.prdata(cache_rdata),.pready(cache_ready_apb),.pslverr(cache_error_apb),.cpu_req_valid(cache_req_valid),.cpu_req_ready(cache_req_ready),.cpu_req_addr(cache_req_addr),.cpu_req_write(cache_req_write),.cpu_req_wdata(cache_req_wdata),.cpu_req_wstrb(cache_req_wstrb),.cpu_req_size(cache_req_size),.cpu_req_id(cache_req_id),.cpu_rsp_valid(cache_rsp_valid),.cpu_rsp_ready(cache_rsp_ready),.cpu_rsp_rdata(cache_rsp_rdata),.cpu_rsp_error(cache_rsp_error));
@@ -251,12 +353,18 @@ module rv32_protected_shared_top #(
   // the integration top.  The off-line model treats this trace as evidence,
   // not as the oracle for the RTL itself.
   protected_crossover_observer crossover_observer(
+    .completion_publish_fault_iova(svc.dma.retire_fault_iova),
+    .fabric_araddr(s_araddr),.fabric_arqos(s_arqos),.fabric_rvalid(s_rvalid),.fabric_rready(s_rready),
+    .cache_evict_event(cache_evict),.cache_access_addr(cache_req_addr),
+    .fabric_ar_age_override(age_ar),.fabric_target_arvalid(m_arvalid),.fabric_target_arready(m_arready),.fabric_target_arid(m_arid),
+    .fabric_arvalid(s_arvalid),.fabric_arready(s_arready),.fabric_awvalid(s_awvalid),.fabric_awready(s_awready),
     .dma_awvalid(s_awvalid[1]),.dma_awready(s_awready[1]),.dma_awaddr(s_awaddr[1]),
     .dma_bvalid(s_bvalid[1]),.dma_bready(s_bready[1]),
     .maint_busy,
-    .clk,.rst_n,.commit_valid,.commit_pc,.commit_instr,.psel,.penable,.pwrite,.pwdata,.pready,.pslverr,.paddr,
+    .clk,.rst_n,.commit_valid,.commit_pc,.commit_instr,.psel,.penable,.pwrite,.pwdata,.pready,.pslverr,.paddr,.prdata,
     .cpu_shared_access(cache_data_sel&&psel&&penable&&pready),.cpu_shared_write(pwrite),.cpu_physical_addr(paddr),
     .commit_trap,.commit_intr,.commit_rs1_addr,.commit_rs2_addr,.commit_rs1_data,.commit_rs2_data,.commit_rd_addr,.commit_rd_data,.commit_mem_addr,.commit_mem_rmask,.commit_mem_wmask,.commit_mem_rdata,.commit_mem_wdata,.commit_mstatus,.commit_mie,.commit_mtvec,.commit_mscratch,.commit_mepc,.commit_mcause,.commit_mtval,.cpu_enable_m(CPU_ENABLE_M),.irq_ext_level(irq),.irq_timer_level(timer_irq),.muldiv_busy(cpu.muldiv_active_q),.muldiv_result_valid(cpu.muldiv_rsp_valid),
+    .muldiv_state(cpu.u_muldiv.state_q),.muldiv_iteration(cpu.u_muldiv.iteration_q),.muldiv_pc(cpu.pending_pc_q),
     .xlate_req_valid(svc.xlate_req_valid),.xlate_req_ready(svc.xlate_req_ready),.xlate_rsp_valid(svc.xlate_rsp_valid),.xlate_rsp_ready(svc.xlate_rsp_ready),
     .xlate_iova(svc.xlate_req_iova),.xlate_paddr(svc.xlate_rsp_paddr),.xlate_asid(svc.xlate_req_asid),.xlate_write(svc.xlate_req_write),.xlate_fault(svc.xlate_rsp_fault),.xlate_tlb_hit(svc.tlb_hit),.xlate_job_tag(svc.dma.active.tag),.xlate_vector_index(svc.dma.vector_index),
     .ptw_req_valid,.ptw_req_ready,.ptw_req_addr,.ptw_rsp_valid,.ptw_rsp_ready,.ptw_rsp_data,.ptw_rsp_error,
@@ -315,11 +423,14 @@ module rv32_protected_shared_top #(
   end
   generate if(USE_CACHE)begin:ownership_checks
     always_ff @(posedge clk) begin
+      ownership_descriptor_t descriptor;
       if (rst_n && cache_data_sel && penable) begin
         for (int oi = 0; oi < 5; oi++) begin
+          descriptor=oi==4 ? ownership_descriptor_t'(svc.dma.active) :
+            ownership_descriptor_t'(svc.dma.submit_fifo[(int'(svc.dma.submit_head)+oi)%4]);
           if (owned_valid[oi] &&
-              (owned_physical_access(owned_input_start[oi],owned_input_end[oi],paddr) ||
-               owned_physical_access(owned_output_start[oi],owned_output_end[oi],paddr)))
+              (owned_physical_access(owned_input_start[oi],owned_input_end[oi],paddr,descriptor.tag,1'b0) ||
+               owned_physical_access(owned_output_start[oi],owned_output_end[oi],paddr,descriptor.tag,1'b1)))
             $fatal(1, "OWNERSHIP_VIOLATION: CPU accessed owned line %08x (input %08x..%08x output %08x..%08x)", paddr,
                    owned_input_start[oi], owned_input_end[oi], owned_output_start[oi], owned_output_end[oi]);
         end

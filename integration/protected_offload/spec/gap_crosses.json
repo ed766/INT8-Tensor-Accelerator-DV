@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "families": {
+    "permission": {"tuples": [[0,0,"allow"],[0,1,"allow"],[0,0,"deny"],[1,0,"allow"],[1,1,"allow"],[1,0,"deny"],[1,1,"deny"]], "minimum_tests": 2},
+    "recovery": {"tuples": [[2,"first"],[4,"first"],[5,"first"],[5,"middle"],[5,"last"]], "minimum_tests": 2},
+    "irq_pending_m_retirement": {"tuples": [["timer","masked"],["timer","enabled"],["external","masked"],["external","enabled"]], "minimum_tests": 2},
+    "reset_boundary": {"tuples": [["metadata_status"],["metadata_address"],["metadata_stage"],["publication"],["before_pop"],["ptw_req"],["accepted_output_write"],["dma_b_wait"],["mem_rsp"],["host_w_wait"],["maintenance_invalidation"]], "minimum_tests": 1},
+    "reset_owner": {"tuples": [["ptw","ptw_req"],["payload_write","accepted_output_write"],["payload_response","dma_b_wait"],["payload_read","mem_rsp"],["host_write","host_w_wait"],["maintenance","maintenance_invalidation"]], "minimum_tests": 1},
+    "retry_attempt": {"tuples": [[2,"first"],[4,"first"],[5,"first"],[4,"repeated"],[5,"repeated"]], "minimum_tests": 1},
+    "cache_maintenance": {"tuples": [["free",0,"success"],["free",1,"success"],["free",2,"success"],["free",0,"error"]], "minimum_tests": 1}
+  },
+  "exclusions": [
+    "Read-hit permission denial is structurally unreachable for this non-user requester: only readable, accessed entries are installed; PTE changes do not mutate cached permissions.",
+    "Reset-boundary features are labeled single-source directed evidence, not independently replicated safety closure.",
+    "Pending at arithmetic retirement is not an exhaustive interrupt-arrival timing matrix.",
+    "No unbounded progress is assumed for a nonresponsive AXI target.",
+    "Retry-attempt and maintenance combinations are single-source feature evidence unless multiple independent templates are reported; the permission/recovery/IRQ safety families retain a two-template requirement.",
+    "Maintenance with device-owned buffers is not credited by free-ownership maintenance windows; owned handler accesses are separately qualified expected-negative tests."
+  ]
+}

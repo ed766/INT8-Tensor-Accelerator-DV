@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "operand_contexts": ["dma", "dual", "sleep", "pressure"],
+  "operand_classes": ["zero", "one", "all_ones", "signed_min", "power_two", "other"],
+  "opcodes": ["mul", "mulh", "mulhsu", "mulhu", "div", "divu", "rem", "remu"],
+  "distinct_operand_samples_per_bin": 2,
+  "operand_cross_bins": 192,
+  "signed_overflow_cases": 8,
+  "operand_executions": 392,
+  "timing_phases": ["before", "early", "middle", "late", "finalize", "response", "after"],
+  "timing_cross_bins": 56,
+  "timing_source": "real accelerator completion IRQ; enabled external interrupt",
+  "timing_delay_sweep": [0, 63],
+  "timing_executions": 528,
+  "limits": "Finite operand classes and sampled real-device IRQ schedules; not all 2^64 operand pairs, timer sources, reset phases, or masking permutations"
+}

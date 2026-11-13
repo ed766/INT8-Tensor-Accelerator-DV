@@ -5,6 +5,14 @@
 // by run, reset epoch, software tag, ASID, and transport direction.
 module protected_crossover_observer (
   input logic clk, input logic rst_n,
+  input logic [3:0] fabric_arvalid, input logic [3:0] fabric_arready,
+  input logic [3:0] fabric_awvalid, input logic [3:0] fabric_awready,
+  input logic [3:0][31:0] fabric_araddr,
+  input logic [3:0][3:0] fabric_arqos,
+  input logic [3:0] fabric_rvalid,input logic [3:0] fabric_rready,
+  input logic cache_evict_event,input logic [31:0] cache_access_addr,
+  input logic [3:0] fabric_ar_age_override,fabric_target_arvalid,fabric_target_arready,
+  input logic [3:0][5:0] fabric_target_arid,
   input logic dma_awvalid, input logic dma_awready,
   input logic [31:0] dma_awaddr,
   input logic dma_bvalid, input logic dma_bready,
@@ -23,8 +31,11 @@ module protected_crossover_observer (
   input logic cpu_enable_m, input logic irq_ext_level, input logic irq_timer_level,
   input logic muldiv_busy,
   input logic muldiv_result_valid,
+  input logic [1:0] muldiv_state,
+  input logic [5:0] muldiv_iteration,
+  input logic [31:0] muldiv_pc,
   input logic psel, input logic penable, input logic pwrite, input logic [31:0] pwdata,
-  input logic pready, input logic pslverr, input logic [31:0] paddr,
+  input logic pready, input logic pslverr, input logic [31:0] paddr, input logic [31:0] prdata,
   input logic cpu_shared_access, input logic cpu_shared_write,
   input logic [31:0] cpu_physical_addr,
   input logic xlate_req_valid, input logic xlate_req_ready,
@@ -81,6 +92,7 @@ module protected_crossover_observer (
   input logic completion_published, input logic [7:0] completion_publish_tag,
   input logic [7:0] completion_publish_asid, input logic [3:0] completion_publish_status,
   input logic [2:0] completion_publish_fault_stage, input logic [6:0] completion_publish_vectors_done,
+  input logic [31:0] completion_publish_fault_iova,
   input logic irq,
   input logic chip_busy, input logic chip_done, input logic chip_error,
   input logic [1:0] chip_power_state,
@@ -172,6 +184,10 @@ module protected_crossover_observer (
   logic [3:0] reset_completion_status_q;
   logic [2:0] reset_irq_pending_q;
   logic reset_maint_active_q;
+  logic prev_timer_level;
+  logic [2:0] prev_raw_status;
+  logic [1:0] reset_muldiv_state_q;
+  logic [5:0] reset_muldiv_iteration_q;
   string trace_path, run_id, source_build_id;
   bit flush_trace;
 
@@ -189,6 +205,7 @@ module protected_crossover_observer (
     event_id = 0;
     submit_seq = 0;
     prev_irq = 1'b0;
+    prev_timer_level = 0;prev_raw_status = 0;
     prev_maint_valid = 1'b0;
     prev_firmware_done = 1'b0;
     prev_chip_busy = 1'b0;
@@ -277,6 +294,8 @@ module protected_crossover_observer (
       reset_completion_status_q = completion_status;
       reset_irq_pending_q = irq_pending_status;
       reset_maint_active_q = maint_busy;
+      reset_muldiv_state_q = muldiv_state;
+      reset_muldiv_iteration_q = muldiv_iteration;
     end
   end
 
@@ -292,7 +311,7 @@ module protected_crossover_observer (
         xlate_pending_id = -1;
         mem_pending_id = -1;
         ptw_pending_id = -1;
-        emit("RESET_ASSERT", $sformatf("xlate_pending=%0d|mem_pending=%0d|ptw_pending=%0d|host_aw_pending=%0d|host_w_pending=%0d|host_ar_pending=%0d|apb_active=%0d|chip_busy=%0d|dma_busy=%0d|maint_active=%0d|muldiv_busy=%0d|completion_pending=%0d|completion_occupancy=%0d|completion_tag=%0d|completion_status=%0d|mem_response_valid=%0d|muldiv_result_valid=%0d", xlate_pending, mem_pending, ptw_pending, host_aw_pending, host_w_pending, host_ar_pending, apb_active, prev_chip_busy, prev_dma_busy, reset_maint_active_q, prev_muldiv_busy, reset_completion_pending_q, reset_completion_occupancy_q, reset_completion_tag_q, reset_completion_status_q, reset_mem_response_valid_q, reset_muldiv_result_valid_q));
+        emit("RESET_ASSERT", $sformatf("xlate_pending=%0d|mem_pending=%0d|ptw_pending=%0d|host_aw_pending=%0d|host_w_pending=%0d|host_ar_pending=%0d|apb_active=%0d|chip_busy=%0d|dma_busy=%0d|maint_active=%0d|muldiv_busy=%0d|completion_pending=%0d|completion_occupancy=%0d|completion_tag=%0d|completion_status=%0d|mem_response_valid=%0d|muldiv_result_valid=%0d|muldiv_state=%0d|muldiv_iteration=%0d", xlate_pending, mem_pending, ptw_pending, host_aw_pending, host_w_pending, host_ar_pending, apb_active, prev_chip_busy, prev_dma_busy, reset_maint_active_q, prev_muldiv_busy, reset_completion_pending_q, reset_completion_occupancy_q, reset_completion_tag_q, reset_completion_status_q, reset_mem_response_valid_q, reset_muldiv_result_valid_q,reset_muldiv_state_q,reset_muldiv_iteration_q));
         apb_active = 1'b0;
         apb_wait_cycles = 0;
         xlate_pending = 1'b0;
@@ -314,7 +333,7 @@ module protected_crossover_observer (
       was_reset <= 1'b0;
       if (commit_valid) emit("RETIRE", $sformatf("pc=%08x|next_pc=%08x|insn=%08x|retire_order=%0d|trap=%0d|intr=%0d|rs1_addr=%0d|rs1_data=%08x|rs2_addr=%0d|rs2_data=%08x|rd_addr=%0d|rd_data=%08x|mem_addr=%08x|mem_rmask=%x|mem_wmask=%x|mem_rdata=%08x|mem_wdata=%08x|mstatus=%08x|mie=%08x|mtvec=%08x|mscratch=%08x|mepc=%08x|mcause=%08x|mtval=%08x|irq_level=%0d|irq_timer_level=%0d|m_ext=%0d", commit_pc, commit_next_pc, commit_instr, commit_order, commit_trap, commit_intr, commit_rs1_addr, commit_rs1_data, commit_rs2_addr, commit_rs2_data, commit_rd_addr, commit_rd_data, commit_mem_addr, commit_mem_rmask, commit_mem_wmask, commit_mem_rdata, commit_mem_wdata, commit_mstatus, commit_mie, commit_mtvec, commit_mscratch, commit_mepc, commit_mcause, commit_mtval, irq_ext_level, irq_timer_level, cpu_enable_m));
       if (muldiv_busy != prev_muldiv_busy)
-        emit("MDIV_BUSY", $sformatf("busy=%0d",muldiv_busy));
+        emit("MDIV_BUSY", $sformatf("busy=%0d|state=%0d|iteration=%0d|pc=%08x|dma_busy=%0d|active_tag=%0d|submit_occ=%0d|comp_occ=%0d|chip_busy=%0d|chip_power=%0d",muldiv_busy,muldiv_state,muldiv_iteration,muldiv_pc,dma_busy,active_descriptor_tag,submit_occupancy,completion_occupancy,chip_busy,chip_power_state));
       if (psel && !penable && !apb_active) begin
         apb_active = 1'b1;
         apb_wait_cycles = 0;
@@ -327,7 +346,7 @@ module protected_crossover_observer (
         emit("APB_WAIT", $sformatf("op=%0d|wait_cycles=%0d", apb_seq, apb_wait_cycles));
       end
       if (psel && penable && pready) begin
-        emit("APB", $sformatf("op=%0d|write=%0d|addr=%08x|wdata=%08x|error=%0d|wait_cycles=%0d", apb_seq, pwrite, paddr, pwdata, pslverr, apb_wait_cycles));
+        emit("APB", $sformatf("op=%0d|write=%0d|addr=%08x|wdata=%08x|rdata=%08x|error=%0d|wait_cycles=%0d", apb_seq, pwrite, paddr, pwdata, prdata, pslverr, apb_wait_cycles));
         apb_seq = apb_seq + 1;
         apb_active = 1'b0;
       end
@@ -472,7 +491,7 @@ module protected_crossover_observer (
       if (accel_out_valid && accel_out_ready)
         emit("ACCEL_OUT", $sformatf("tag=%0d|vector=%0d|data=%08x", accel_out_tag, mem_vector_index, accel_out_data));
       if (completion_published)
-        emit("COMPLETE_PUBLISH", $sformatf("tag=%0d|asid=%0d|status=%0d|fault_stage=%0d|vectors_done=%0d", completion_publish_tag, completion_publish_asid, completion_publish_status, completion_publish_fault_stage, completion_publish_vectors_done));
+        emit("COMPLETE_PUBLISH", $sformatf("tag=%0d|asid=%0d|status=%0d|fault_stage=%0d|vectors_done=%0d|fault_iova=%08x", completion_publish_tag, completion_publish_asid, completion_publish_status, completion_publish_fault_stage, completion_publish_vectors_done,completion_publish_fault_iova));
       if (completion_valid && completion_ready)
         emit("COMPLETE", $sformatf("tag=%0d|asid=%0d|status=%0d|fault_iova=%08x|fault_stage=%0d|vectors_done=%0d|submit_occ=%0d|comp_occ=%0d", completion_tag, completion_asid, completion_status, completion_fault_iova, completion_fault_stage, completion_vectors_done, submit_occupancy, completion_occupancy));
       begin : ownership_events
@@ -495,9 +514,21 @@ module protected_crossover_observer (
       if (cpu_shared_access && (|owned_valid))
         emit("OWNED_CPU_ACCESS", $sformatf("addr=%08x|write=%0d|active_ranges=%0d|active_tag=%0d", cpu_physical_addr, cpu_shared_write, $countones(owned_valid), active_descriptor_tag));
       if (irq && !prev_irq)
-        emit("IRQ_SET", $sformatf("raw=%0d|pending=%0d|enable=%0d|ext=%0d|timer=%0d|muldiv_busy=%0d|apb_active=%0d|apb_wait_cycles=%0d|retire_order=%0d",
+        emit("IRQ_SET", $sformatf("raw=%0d|pending=%0d|enable=%0d|ext=%0d|timer=%0d|muldiv_busy=%0d|state=%0d|iteration=%0d|pc=%08x|apb_active=%0d|apb_wait_cycles=%0d|retire_order=%0d",
              irq_raw_status, irq_pending_status, irq_enable_mask, irq_ext_level, irq_timer_level,
-             muldiv_busy, apb_active, apb_wait_cycles, commit_order));
+             muldiv_busy, muldiv_state, muldiv_iteration, muldiv_pc, apb_active, apb_wait_cycles, commit_order));
+      if(irq_timer_level!=prev_timer_level || irq_raw_status!=prev_raw_status)
+        emit("IRQ_SOURCE_EDGE",$sformatf("raw=%0d|pending=%0d|enable=%0d|ext=%0d|timer=%0d|muldiv_busy=%0d|state=%0d|iteration=%0d|pc=%08x",irq_raw_status,irq_pending_status,irq_enable_mask,irq_ext_level,irq_timer_level,muldiv_busy,muldiv_state,muldiv_iteration,muldiv_pc));
+      if($countones(fabric_arvalid)>1 || $countones(fabric_awvalid)>1)
+        emit("FABRIC_CANDIDATES",$sformatf("ar_valid=%x|ar_grant=%x|aw_valid=%x|aw_grant=%x",fabric_arvalid,fabric_arvalid&fabric_arready,fabric_awvalid,fabric_awvalid&fabric_awready));
+      for(int master=0;master<4;master++)begin
+        if(fabric_arvalid[master])emit("FABRIC_AR_OFFER",$sformatf("master=%0d|addr=%08x|qos=%0d|accepted=%0d",master,fabric_araddr[master],fabric_arqos[master],fabric_arready[master]));
+        if(fabric_rvalid[master]&&fabric_rready[master])emit("FABRIC_R_ACCEPT",$sformatf("master=%0d",master));
+      end
+      if(cache_evict_event)emit("CACHE_EVICT",$sformatf("addr=%08x",cache_access_addr));
+      for(int target=0;target<4;target++)if(fabric_ar_age_override[target]&&fabric_target_arvalid[target]&&fabric_target_arready[target])
+        emit("FABRIC_AGE_GRANT",$sformatf("target=%0d|master=%0d",target,fabric_target_arid[target][5:4]));
+      prev_timer_level<=irq_timer_level;prev_raw_status<=irq_raw_status;
       if(psel&&penable&&pready&&!pslverr&&pwrite&&paddr==32'h4000200c)
         emit("IRQ_ACK", $sformatf("mask=%0d|raw=%0d|pending=%0d|completion_published=%0d|completion_tag=%0d",
              pwdata[2:0],irq_raw_status,irq_pending_status,completion_published,completion_publish_tag));

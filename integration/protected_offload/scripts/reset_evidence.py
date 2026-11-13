@@ -6,6 +6,33 @@ def phase_reached(events: list[dict[str, str]], phase: str) -> bool:
     if len(resets) != 1:
         return False
     reset = resets[0]
+    if phase.startswith("metadata_"):
+        address={"metadata_status":"40000020","metadata_address":"40000024","metadata_stage":"40000028"}[phase]
+        return reset.get("completion_pending")=="1" and any(
+            e.get("kind")=="APB" and e.get("addr")==address and e.get("write")=="0" and
+            0<=int(reset["cycle"])-int(e["cycle"])<=2 for e in events[:events.index(reset)])
+    if phase=="publication":
+        return reset.get("completion_pending")=="1" and any(
+            e.get("kind")=="COMPLETE_PUBLISH" and 0<=int(reset["cycle"])-int(e["cycle"])<=2
+            for e in events[:events.index(reset)])
+    if phase=="before_pop":
+        return reset.get("completion_pending")=="1" and reset.get("apb_active")=="1"
+    if phase=="dma_b_wait":
+        before=events[:events.index(reset)]
+        aw=next((e for e in reversed(before) if e.get("kind")=="DMA_AXI_AW"),None)
+        return bool(reset.get("mem_pending")=="1" and aw and not any(
+            e.get("kind")=="DMA_AXI_B" and int(e["cycle"])>=int(aw["cycle"]) for e in before))
+    if phase == "multiple_owners":
+        snapshots=[e for e in events if e.get("kind")=="RESET_IRQ_SNAPSHOT" and
+                   e.get("epoch")==reset.get("epoch") and e.get("cycle")==reset.get("cycle")]
+        return (all(reset.get(k)=="1" for k in ("muldiv_busy","dma_busy","mem_pending","completion_pending")) and
+                len(snapshots)==1 and int(snapshots[0].get("pending","0"))&2!=0)
+    if phase.startswith("m_dma_"):
+        before=events[:events.index(reset)]
+        start=next((event for event in reversed(before) if event.get("kind")=="MDIV_BUSY" and event.get("busy")=="1"),None)
+        return bool(reset.get("muldiv_busy")=="1" and reset.get("dma_busy")=="1" and start and
+                    start.get("dma_busy")=="1" and
+                    (phase!="m_dma_response" or reset.get("muldiv_result_valid")=="1"))
     if phase == "prolonged_backpressure":
         before=events[:events.index(reset)]
         waits=[event for event in before if event.get("kind")=="APB_WAIT" and

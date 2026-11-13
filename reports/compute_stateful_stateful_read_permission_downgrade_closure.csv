@@ -1,0 +1,2 @@
+scenario,family,status,evidence,witness_count,event_ids,trace,trace_sha256,errors
+stateful_read_permission_downgrade,end_to_end,PASS,actual_RTL_and_independent_replay,29,738;870;941;873;2128;2136;2160;2139;2143;2257;2268;2292;2271;2275;2394;2404;2428;2407;2411;2626;2635;2659;2638;2642;2218;2393;1916;2305;2456,build/protected_offload/shared_firmware/stateful_read_permission_downgrade/crossover.trace,1552f278ebac17d3a0c2103fe87943663ab08757da530b39ec4c07ef26594fce,

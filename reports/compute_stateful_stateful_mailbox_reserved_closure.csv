@@ -1,0 +1,2 @@
+scenario,family,status,evidence,witness_count,event_ids,trace,trace_sha256,errors
+stateful_mailbox_reserved,edges,PASS,actual_RTL_and_independent_replay,3,1747;1751;1873,build/protected_offload/shared_firmware/stateful_mailbox_reserved/crossover.trace,d4a79f668c6711f0dd0a71fd37ce31fbec9fff27183ee6c3298ebb30fc05822d,

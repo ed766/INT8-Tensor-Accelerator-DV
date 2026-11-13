@@ -22,23 +22,27 @@
     },
     {
       "project": "ucie_chiplet_soc",
-      "commit": "4d1f1639947822e0260ecdab50d3b9bca969d01f",
+      "commit": "f58886a9b6f14d34c6f3398cb69937e8abe0c3c5",
       "file": "vendor/rv32/rv32_core.sv",
-      "sha256": "1821d760dba4c585d31fc2986edfa0526b72c5e1db2b2fef8c1d59ef4a9e8533",
-      "source_state": "recorded authoritative commit plus local compile-time RV32_BUG_APB_SETUP_RETIRE and RV32_BUG_IRQ_BEFORE_M_RETIRE mutation hooks; nominal instruction behavior unchanged"
+      "sha256": "668a4a64bd372c5b3319edf398af531cd1428117c69e63481ffb755443a93f7b",
+      "source_state": "byte-identical immutable authoritative source including verification hooks",
+      "source_path": "base_soc/rtl/pd1_rv32/rv32_core.sv"
     },
     {
       "project": "ucie_chiplet_soc",
-      "commit": "4d1f1639947822e0260ecdab50d3b9bca969d01f",
+      "commit": "f58886a9b6f14d34c6f3398cb69937e8abe0c3c5",
       "file": "vendor/rv32/rv32_muldiv.sv",
-      "sha256": "fe4028ccd0e0222a3bddd7bb68670e1c796bdabc47efa51a7942e9ba322ca644",
-      "source_state": "recorded authoritative commit with checksum-verified compile-time verification mutation hooks"
+      "sha256": "0810f4e3367bd6bae2106c40780b3a2b03e6a715ad447c2175b0a85c9c06b3c2",
+      "source_state": "byte-identical immutable authoritative source including verification hooks",
+      "source_path": "base_soc/rtl/pd1_rv32/rv32_muldiv.sv"
     },
     {
       "project": "ucie_chiplet_soc",
-      "commit": "96ecbb1d572f001c1000beb6edf44b4cc6ebcec9",
+      "commit": "f58886a9b6f14d34c6f3398cb69937e8abe0c3c5",
       "file": "vendor/rv32/rv32_rom_feeder.sv",
-      "sha256": "018528b019d2119b42742664608098915f1b50c4040f460f00a9199677a6a80a"
+      "sha256": "018528b019d2119b42742664608098915f1b50c4040f460f00a9199677a6a80a",
+      "source_path": "chiplet_extension/rtl/firmware/rv32_rom_feeder.sv",
+      "source_state": "byte-identical immutable authoritative source including verification hooks"
     },
     {
       "project": "AXI4-L1-Cache-DV",

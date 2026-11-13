@@ -283,3 +283,78 @@ release-check: project-check fx-compiler-check mutation-check formal-check code-
 
 clean:
 	rm -rf build
+.PHONY: compute-live-m-check
+.PHONY: compute-stateful-check compute-stateful-random compute-stateful-crosses compute-stateful-summary compute-stateful-selftest compute-stateful-code-coverage compute-stateful-mutations compute-stateful-release-check
+.PHONY: compute-peer-holes
+.PHONY: compute-end-to-end-check
+compute-end-to-end-check: protected-offload-provenance
+	python3 integration/protected_offload/scripts/run_stateful_crossover.py --family end_to_end
+.PHONY: compute-end-to-end-mutations
+compute-end-to-end-mutations:
+	python3 integration/protected_offload/scripts/run_end_to_end_mutations.py
+.PHONY: compute-end-to-end-selftest
+compute-end-to-end-selftest:
+	python3 integration/protected_offload/scripts/test_end_to_end_checks.py
+.PHONY: compute-end-to-end-summary
+compute-end-to-end-summary:
+	python3 integration/protected_offload/scripts/report_end_to_end.py
+.PHONY: compute-gap-check compute-gap-selftest compute-gap-alias-check compute-gap-mutations compute-gap-crosses compute-gap-repro-check compute-gap-release-check
+compute-gap-check: compute-stateful-check
+compute-gap-selftest:
+	cd integration/protected_offload/scripts && python3 -m unittest test_gap_evidence
+compute-gap-alias-check:
+	python3 integration/protected_offload/scripts/run_ownership_alias_check.py
+compute-gap-mutations:
+	python3 integration/protected_offload/scripts/run_gap_mutations.py
+compute-gap-crosses:
+	python3 integration/protected_offload/scripts/report_gap_evidence.py
+compute-gap-repro-check:
+	python3 integration/protected_offload/scripts/check_gap_reproducibility.py
+compute-gap-release-check:
+	$(MAKE) compute-gap-check compute-stateful-random
+	$(MAKE) compute-gap-alias-check compute-gap-mutations compute-end-to-end-selftest
+	$(MAKE) compute-stateful-crosses compute-gap-crosses
+	$(MAKE) compute-gap-selftest
+	$(MAKE) compute-stateful-code-coverage compute-end-to-end-summary
+	$(MAKE) compute-stateful-summary docs-check
+	python3 integration/protected_offload/scripts/generate_crossover_dashboard.py
+	$(MAKE) compute-gap-repro-check
+compute-peer-holes:
+	bash -c 'source ../ucie_chiplet_soc/chiplet_extension/build/external_riscv_tools/environment.sh && python3 integration/protected_offload/scripts/run_peer_hole_checks.py'
+compute-stateful-check: protected-offload-provenance
+	python3 integration/protected_offload/scripts/run_stateful_crossover.py
+compute-stateful-random: protected-offload-provenance
+	python3 integration/protected_offload/scripts/run_stateful_crossover.py --family random
+compute-stateful-crosses:
+	python3 integration/protected_offload/scripts/stateful_cross_coverage.py
+compute-stateful-summary:
+	python3 integration/protected_offload/scripts/summarize_stateful_evidence.py
+compute-stateful-selftest:
+	python3 integration/protected_offload/scripts/test_stateful_crossover.py
+compute-stateful-mutations:
+	python3 integration/protected_offload/scripts/run_stateful_mutations.py
+compute-stateful-code-coverage:
+	bash -c 'source ../ucie_chiplet_soc/chiplet_extension/build/external_riscv_tools/environment.sh && python3 integration/protected_offload/scripts/run_compute_crossover_code_coverage.py --stateful'
+compute-stateful-release-check:
+	$(MAKE) compute-stateful-check compute-stateful-random
+	$(MAKE) compute-stateful-selftest compute-stateful-crosses compute-stateful-mutations
+	$(MAKE) compute-stateful-code-coverage
+	$(MAKE) compute-peer-holes
+	$(MAKE) compute-end-to-end-selftest compute-end-to-end-mutations
+	$(MAKE) compute-end-to-end-summary
+	$(MAKE) compute-gap-alias-check compute-gap-mutations compute-gap-crosses
+	$(MAKE) compute-gap-selftest
+	$(MAKE) compute-stateful-summary
+.PHONY: compute-m-operand-check compute-m-timing-check compute-m-permutation-check
+compute-m-operand-check:
+	python3 integration/protected_offload/scripts/run_m_permutations.py operands
+compute-m-timing-check:
+	python3 integration/protected_offload/scripts/run_m_permutations.py timing
+compute-m-permutation-check: compute-m-operand-check compute-m-timing-check
+	python3 -m unittest discover -s integration/protected_offload/scripts -p test_m_permutations.py
+compute-crossover-release-check: compute-live-m-check
+compute-crossover-release-check: compute-m-permutation-check
+compute-live-m-check:
+	python3 integration/protected_offload/scripts/check_provenance.py
+	python3 -m unittest discover -s integration/protected_offload/scripts -p test_live_m_interactions.py
+	python3 integration/protected_offload/scripts/run_live_m_interactions.py

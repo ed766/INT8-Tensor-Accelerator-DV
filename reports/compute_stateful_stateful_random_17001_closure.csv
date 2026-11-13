@@ -1,0 +1,2 @@
+scenario,family,status,evidence,witness_count,event_ids,trace,trace_sha256,errors
+stateful_random_17001,random,PASS,actual_RTL_and_independent_replay,34,3937;3944;5061;5068;6177;6184;7293;7300;3923;5047;6163;7279;665;3716;3770;4852;4909;5968;6025;7084;7141;3834;4958;6074;7190;689;3761;3822;4875;4930;5991;6046;7107;7162,build/protected_offload/shared_firmware/stateful_random_17001/crossover.trace,58beb4bc6a848192284749f0af7e0232e1b8854a341f2d0aec4cec1a4e631abf,

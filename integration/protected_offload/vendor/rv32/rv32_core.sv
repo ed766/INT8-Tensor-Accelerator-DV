@@ -448,8 +448,8 @@ module rv32_core #(
       rvfi_mem_wdata <= '0;
       mcycle_q <= mcycle_q + 1'b1;
       // Interrupt entry is represented by a legacy RVFI pseudo-event, not a
-      // retired instruction, so it must not advance minstret.
-      if (retire && !rvfi_intr) minstret_q <= minstret_q + 1'b1;
+      // retired instruction. Synchronous fault events likewise do not retire.
+      if (retire && !rvfi_intr && !rvfi_trap) minstret_q <= minstret_q + 1'b1;
 
       if (wfi_sleep_q) begin
         if ((irq_ext === 1'b1) || (irq_timer === 1'b1)) begin
@@ -1014,15 +1014,66 @@ module rv32_core #(
       end
     end
   end
+`ifdef FORMAL_RV32M_CORE
+  logic formal_initialized = 0;
+  logic formal_m_owned;
+  logic [31:0] formal_m_insn, formal_m_pc;
+  always_ff @(posedge clk) begin
+    formal_initialized <= 1;
+    if (!rst_n) begin
+      formal_m_owned <= 0;
+      formal_m_insn <= 0;
+      formal_m_pc <= 0;
+    end else begin
+      if (muldiv_req_valid && muldiv_req_ready) begin
+        assert(!formal_m_owned);
+        formal_m_owned <= 1;
+        formal_m_insn <= pending_instr_q;
+        formal_m_pc <= pending_pc_q;
+      end
+      if (muldiv_rsp_valid && muldiv_rsp_ready) begin
+        assert(formal_m_owned);
+        formal_m_owned <= 0;
+      end
+      if (muldiv_active_q) begin
+        assert(formal_m_owned);
+        assert(!psel);
+        assert(pending_instr_q == formal_m_insn);
+        assert(pending_pc_q == formal_m_pc);
+      end
+      if (rvfi_valid && !rvfi_trap && !rvfi_intr &&
+          rvfi_insn[6:0] == 7'h33 && rvfi_insn[31:25] == 1) begin
+        assert(formal_initialized && $past(rst_n));
+        assert($past(muldiv_rsp_valid && muldiv_rsp_ready));
+        assert(rvfi_insn == formal_m_insn);
+        assert(rvfi_pc_rdata == formal_m_pc);
+        assert(rvfi_mem_rmask == 0 && rvfi_mem_wmask == 0);
+      end
+      if (formal_initialized && !$past(rst_n)) begin
+        assert(!rvfi_valid);
+        assert(!muldiv_active_q);
+      end
+      cover(rvfi_valid && !rvfi_trap && rvfi_insn[31:25] == 1 && rvfi_insn[6:0] == 7'h33);
+    end
+  end
+`endif
 `ifndef SYNTHESIS
   a_mmio_setup_no_retire: assert property (@(posedge clk) disable iff (!rst_n)
     mmio_pending_q && !mmio_access_q |-> !retire);
   a_mmio_retire_requires_access: assert property (@(posedge clk) disable iff (!rst_n)
     retire && mmio_pending_q |-> mmio_access_q && pready);
-  // A multicycle arithmetic instruction is a single architectural boundary:
-  // an interrupt may be taken only after its result retires and the active
-  // request has been cleared.
+  // An interrupt boundary may not split a multicycle arithmetic instruction.
   a_interrupt_after_muldiv_retire: assert property (@(posedge clk) disable iff (!rst_n)
     rvfi_intr |-> !muldiv_active_q);
+  a_muldiv_blocks_younger_apb: assert property (@(posedge clk) disable iff (!rst_n)
+    muldiv_active_q |-> !psel);
+  a_muldiv_dispatch_has_owner: assert property (@(posedge clk) disable iff (!rst_n)
+    muldiv_req_valid && muldiv_req_ready |=> muldiv_active_q);
+  a_muldiv_retirement_requires_consumption: assert property (@(posedge clk) disable iff (!rst_n)
+    rvfi_valid && !rvfi_trap && !rvfi_intr && rvfi_insn[6:0] == 7'h33 && rvfi_insn[31:25] == 1 |->
+    $past(muldiv_active_q && muldiv_rsp_valid && muldiv_rsp_ready));
+  a_muldiv_retirement_no_memory_effect: assert property (@(posedge clk) disable iff (!rst_n)
+    rvfi_valid && rvfi_insn[6:0] == 7'h33 && rvfi_insn[31:25] == 1 |->
+    rvfi_mem_rmask == 0 && rvfi_mem_wmask == 0);
 `endif
 endmodule

@@ -71,6 +71,18 @@ This project is the portfolio's ML/datapath example. It shows how a PyTorch mode
 
 See [project metrics](docs/project_metrics.md), the [verification plan](docs/verification_plan.md), the [FX graph compiler](docs/fx_graph_compiler.md), and the [two-layer PyTorch demonstration](docs/pytorch_mlp_demo.md).
 
+Supplemental `make compute-live-m-check` verifies each RV32M opcode during
+DMA, concurrent AES/INT8, chiplet sleep/resume, and full completion-FIFO
+pressure, plus precise IRQ delivery. See the separately reported
+[live witnesses](reports/compute_live_m_interactions.csv) and
+[opcode/service crosses](reports/compute_live_m_cross_coverage.csv); these do
+not inflate canonical coverage or imply exhaustive timing closure.
+
+`make compute-m-permutation-check` expands this with finite operand-class
+and observed device-IRQ phase matrices. See the generated
+[operand/timing evidence dashboard](docs/compute_crossover_evidence_dashboard.md#finite-operand-and-irq-timing-closure)
+for execution counts, bin witnesses, and explicit limits.
+
 ## RV32I Hardware/Software Benchmark
 
 ![RV32I and accelerator benchmark architecture](docs/images/rv32_accel_architecture.svg)
@@ -234,6 +246,22 @@ reports/   normalized checked-in CSV results
 integration/rv32_offload/  optional GCC/RV32I hardware-software benchmark lane
 integration/protected_offload/  optional protected descriptor-DMA integration lane
 ```
+
+## Stateful Compute Crossover
+
+Additional [end-to-end lifetime and recovery tests](docs/compute_end_to_end_closure.md)
+exercise multi-owner reset, handler/cache/arithmetic overlap, queued invalidation,
+repeated cross-stage retries and stable CPU-visible completion records.
+The [measured snapshot](reports/compute_end_to_end_closure.md) is generated from
+execution-bound traces; these tests do not inflate canonical closure denominators.
+
+<!-- STATEFUL METRICS START -->
+Supplemental stateful evidence: **62/62 directed**, **32/32 seeded multi-job workloads**, **35/35 event-correlated crosses**, and **7/7 qualified RTL mutations**. Fresh new-control raw coverage: **119/122 (97.54%) line**, **175/186 (94.09%) branch**. Muldiv remains separately reported: **84.62% line / 94.12% branch**. Canonical denominators are unchanged. [Closure](docs/compute_stateful_closure.md), [advanced ownership/reset closure](docs/compute_gap_closure.md), [cross witnesses](docs/compute_stateful_cross_coverage.md), [code coverage](docs/compute_stateful_code_coverage.md), and [remaining-hole review](reports/compute_stateful_coverage_hole_review.csv).
+
+Independent-peer component evidence: **14/14 asserted/instrumented executions**, covering **12** previously missed wait/containment branches separately from integration coverage. [Tests and boundaries](docs/compute_peer_holes.md).
+
+Advanced closure: **42/42 correlated bins**, **3/3 targeted RTL mutations**, and **3/3 ownership alias/handler negative-control pairs**. [Witnesses and boundaries](docs/compute_gap_closure.md).
+<!-- STATEFUL METRICS END -->
 
 ## Limitations
 

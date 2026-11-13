@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "lane": "supplemental_live_m",
+  "opcodes": ["MUL", "MULH", "MULHSU", "MULHU", "DIV", "DIVU", "REM", "REMU"],
+  "contexts": {
+    "dma": "M retirement within the same-epoch accepted DMA active interval",
+    "dual": "M retirement while DMA and chiplet AES are both active",
+    "sleep": "M retirement during DMA active and actual chiplet SLEEP followed by RUN",
+    "pressure": "M request starts with four unread completions and DMA active; M retires before drain"
+  },
+  "required_bins": 32,
+  "additional_scenario": "Enabled device IRQ arrives during M; M retires before handler entry with mepc equal to next PC",
+  "limitations": "One operand construction per bin; not exhaustive reset, configuration-reference, or timing closure"
+}

@@ -1,0 +1,7 @@
+rtl_file,evidence_scope,line_hit,line_total,line_percent,branch_hit,branch_total,branch_percent
+integration/protected_offload/rtl/protected_chiplet_apb_bridge.sv,independent_peer_component_source_union,3,3,100.00,6,6,100.00
+integration/protected_offload/rtl/protected_dma_axi_adapter.sv,independent_peer_component_source_union,7,8,87.50,26,26,100.00
+integration/protected_offload/rtl/protected_host_axi_bridge.sv,independent_peer_component_source_union,4,5,80.00,8,8,100.00
+integration/protected_offload/rtl/protected_offload_dma.sv,independent_peer_component_source_union,28,29,96.55,61,78,78.21
+integration/protected_offload/rtl/protected_queue_count_next.sv,independent_peer_component_source_union,4,4,100.00,0,0,NA
+integration/protected_offload/vendor/rv32/rv32_muldiv.sv,independent_peer_component_source_union,11,13,84.62,33,34,97.06

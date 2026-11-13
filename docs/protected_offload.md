@@ -1,5 +1,46 @@
 # Protected Accelerator Offload
 
+## Operand and IRQ Timing Matrix
+
+`make compute-m-permutation-check` adds finite, separately reported closure:
+eight opcodes, six mutually exclusive operand classes, and four live service
+contexts (DMA, AES/INT8 overlap, SLEEP, full completion FIFO), with two distinct
+operand samples per bin and explicit signed overflow cases. Both samples come
+from one generator; they are not independent stimulus implementations.
+
+The IRQ sweep qualifies before/early/middle/late/finalization/result/after
+phases from actual observed arithmetic state, not requested delays. It checks
+real accelerator completion interrupts and precise handler entry after M
+retirement. Strict ISS replay, independent arithmetic predictions, numerical
+results, and AES checks remain required. Run and witness counts regenerate in
+the [evidence dashboard](compute_crossover_evidence_dashboard.md).
+
+This does not close exhaustive operands, timer sources, masking combinations,
+reset timing, or all power-state permutations. Those are distinct test models.
+
+## Live RV32M Service Crosses
+
+`make compute-live-m-check` is supplemental to the canonical crossover lane.
+It executes separate GCC firmware for active DMA, eight opcode-specific
+AES/INT8 overlaps, SLEEP/resume, device IRQ during arithmetic, and full
+completion-FIFO pressure. The 32 opcode/service bins cite actual retirement
+event IDs; the IRQ witness checks retirement before handler entry and exact
+`mepc`. Strict ISS/transaction/numerical replay and independent AES stream and
+destination-memory checks are required, not just firmware mailbox success.
+
+Reports: [scenarios](../reports/compute_live_m_interactions.csv) and
+[crosses](../reports/compute_live_m_cross_coverage.csv). These sampled windows
+do not claim exhaustive operands, reset phases, configuration-reference or
+power-state crosses. The fixed IRQ schedule delays AXI B responses by nine
+cycles; if that no longer reaches arithmetic, the lane fails rather than
+counting the requested timing as evidence.
+
+The protected-offload RV32 snapshot is imported from immutable authoritative
+Git bytes using `integration/protected_offload/scripts/import_rv32_snapshot.py
+--commit <commit>`. The importer rejects dirty source divergence. Run
+`check_provenance.py --authoritative-source <chiplet-repository>` to verify
+the imported bytes against that commit in addition to the normal hash check.
+
 ## Python Dependencies
 
 Use the same Python environment for simulation runners and their reference
@@ -297,3 +338,9 @@ This is behavioral open-source pre-silicon evidence. It is not AXI compliance,
 IOMMU certification, production firmware, cache coherence, or implementation
 signoff. Half of the shared-fabric matrix polls; half uses machine external
 interrupts, WFI, trap entry, completion draining, acknowledgement, and MRET.
+
+## Stateful Crossover Extension
+
+The optional [stateful closure](compute_stateful_closure.md) adds 23 executable scenarios beyond the finite M operand/IRQ matrices. It includes cause-qualified timer/device/APB-fault handling; exact falling-edge arithmetic/DMA reset phases and same-identity reboot; 260 repeated jobs, two-bank references and generation rollover; four-entry TLB replacement, cached write-permission failures, and a second output failure during retry; live load-M-store cache dependencies and failed-maintenance recovery; completion pressure with channel stalls; arithmetic during chiplet SLEEP; and independently checked numerical variation with timer interruption. Canonical totals remain separate.
+
+`make compute-stateful-check`, `make compute-stateful-selftest`, `make compute-stateful-mutations`, and `make compute-stateful-code-coverage` produce separate reports. The native coverage target collects evidence rather than declaring the broader raw 95%/90% control target closed. Physical-alias/handler-access matrices, every multi-owner reset combination, and exhaustive interrupt/fault timing permutations remain outside this finite extension. No such missing tuple is silently excluded from canonical coverage.
