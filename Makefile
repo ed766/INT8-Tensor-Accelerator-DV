@@ -128,7 +128,7 @@ rv32m-core-random: protected-offload-provenance
 compute-crossover-model: protected-offload-provenance
 	$(PYTHON) integration/protected_offload/scripts/run_shared_firmware.py --matrix --model
 
-compute-crossover-checker-selftest: compute-crossover-schema3-smoke
+compute-crossover-checker-selftest: compute-crossover-schema3-smoke compute-stateful-check
 	$(PYTHON) integration/protected_offload/scripts/check_crossover_trace_selftest.py
 	$(HOSTCHECK_PYTHON) -m unittest discover -s integration/protected_offload/scripts -p 'test_*.py'
 	$(HOSTCHECK_PYTHON) integration/protected_offload/scripts/test_compute_host_evidence.py
