@@ -23,12 +23,19 @@ Yosys 0.66+181 mapped both designs with Flow Scripts revision
 Flow Scripts revision `baaa665ad873b358089fc20150a9666c8c865334`
 for physical implementation. These are floorplan-stage estimates.
 
-## Four-entry routed baseline
+## Routed results
 
-Detailed routing reported zero violations. The extracted timing report
-shows +2.01879 ns worst setup slack at 10 ns. OpenROAD's final standard-cell
-area metric was 99,310.3 µm². The worst core-clock setup path starts at
-`previous_bank$_DFFE_PN0P_` and ends at
-`result_fifo_data[0][18]$_DFFE_PP_`. These are Nangate45 implementation
-estimates. The simulation firmware cycle counts are reported separately in
-the [cross-project demo](../../docs/cross_project_demo.md).
+| FIFO entries | Final cell area excluding fillers (µm²) | Extracted worst setup slack (ns) | Router violations |
+| --- | ---: | ---: | ---: |
+| 4 | 99,310.3 | +2.02 | 0 |
+| 8 | 100,491.3 | +2.06 | 0 |
+
+The eight-entry FIFO increased the measured cell area by about 1.2%.
+Both core-clock critical paths start at `previous_bank$_DFFE_PN0P_`.
+The four-entry path ends at `result_fifo_data[0][18]$_DFFE_PP_` and the
+eight-entry path ends at `result_fifo_data[6][29]$_DFFE_PP_`.
+Timing uses extracted parasitics. These are implementation estimates
+under the stated constraints. The flow's default IR analysis needs a
+validated supply and activity setup before drawing power integrity
+conclusions. Firmware simulation cycles are in the
+[cross-project demo](../../docs/cross_project_demo.md).
