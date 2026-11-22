@@ -42,3 +42,14 @@ Functional and cross coverage are project-defined and derived from workloads tha
   The early-completion mutation must fail the memory request hold check.
   Native coverage from this bench is component evidence. The integrated
   firmware coverage report uses its own workload and denominator.
+
+## Independent RISCV-DV generator smoke
+
+With RISCV-DV's Python requirements, RV32 GCC/binutils, and Spike on PATH,
+run `bash scripts/run_riscv_dv_spike.sh /path/to/riscv-dv /path/to/new-output`.
+The runner checks the upstream revision, generates and assembles the
+seed-2601 arithmetic program with PyFlow, and checks Spike completion.
+The observed RV32IMC run produced 7,337 commit records. This lane qualifies
+the independent generator and its program on the ISS. The generated
+program contains compressed instructions, so RTL differential replay
+requires a separate RV32IM-compatible target and bring-up harness.
