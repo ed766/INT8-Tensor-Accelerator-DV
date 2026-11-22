@@ -20,7 +20,7 @@ jobs:
         with:
           path: int8_tensor_accelerator_dv
       - uses: actions/checkout@v7
-        if: matrix.lane == 'protected-offload'
+        if: matrix.lane == 'protected-offload' || matrix.lane == 'mlir'
         with:
           repository: ed766/ucie_chiplet_soc
           path: ucie_chiplet_soc
