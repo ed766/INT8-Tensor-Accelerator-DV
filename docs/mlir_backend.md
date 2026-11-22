@@ -112,3 +112,45 @@ control. The MLIR CI job publishes `three_layer_comparison.csv`, the
 lowered schedules, and `premature_reuse.txt` with the rejection and first
 incorrect trace event. The lifetime model covers straight-line two- and
 three-layer graphs and the blocking firmware ABI.
+
+## Batch tiling under AXI contention
+
+**Four-vector tiles reduced the longest observed completion on every tested
+shape and increased total inference cycles.** The compiler uses the
+full batch by default. With `--batch-tiling=auto --axi-contention`, it
+uses four-vector tiles when the first descriptor would read more than
+64 input words (`batch × input width / 4`). The rule favors fewer
+interrupts for small workloads and shorter intervals between completions
+for larger ones. `--batch-tiling=full` and `--batch-tiling=four` reproduce
+the two fixed policies.
+
+The MLIR pass records the tile length on the lowered schedule. The
+blocking firmware ABI advances input and output addresses for each slice
+and consumes each IRQ completion before reusing its tag. Layer ownership
+and cache maintenance still apply to the full layer. CI checks the exact
+descriptor ranges, PyTorch bytes and ordered completion events, and
+rejects an invalid tile length.
+
+### Held-out evaluation
+
+The comparison used four-beat QoS 15 read traffic against QoS 8 DMA.
+The evaluation goal was the fastest of the two policies with a longest
+observed submission-to-consumption interval of at most 1,000 cycles.
+The heuristic was set on the basis of the calibration shapes
+(8×16, 16×32 and 16×64). All three held-out shapes selected the fastest
+measured policy that met the target.
+
+| Held-out workload | Full cycles | Four-vector cycles | Longest completion, full → four | Auto picked |
+| --- | ---: | ---: | ---: | --- |
+| Batch 16, width 8, two layers | 5,623 | 6,922 | 526 → 193 | Full |
+| Batch 8, width 32, two layers | 9,607 | 10,303 | 706 → 385 | Full |
+| Batch 8, width 64, three layers | 18,125 | 19,040 | 1,243 → 649 | Four |
+
+For the held-out three-layer model, tiling added three descriptors and
+915 cycles while reducing maximum observed completion latency by 594
+cycles. Both policies moved 672 payload bytes. The latency target is an
+evaluation criterion for these simulations. The heuristic uses static
+shape and a contention flag, and it has limited validation across
+traffic patterns. The existing reproduction command writes
+`batch_tiling.csv` with 18 RTL runs, including the measured automatic
+policy, requester overlap, maximum read-address wait and trace hashes.

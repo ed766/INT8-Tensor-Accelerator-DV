@@ -18,6 +18,13 @@ LogicalResult verifySchedule(func::FuncOp schedule) {
   auto layers = schedule->getAttrOfType<IntegerAttr>("int8.layers");
   if (!layers || (layers.getInt() != 2 && layers.getInt() != 3))
     return schedule.emitError("expected a two- or three-layer runtime schedule");
+  if (auto tile = schedule->getAttrOfType<IntegerAttr>("int8.tile_vectors")) {
+    auto batch = schedule->getAttrOfType<IntegerAttr>("int8.batch");
+    if (!batch || (batch.getInt() != 4 && batch.getInt() != 8 && batch.getInt() != 16) ||
+        (tile.getInt() != 4 && tile.getInt() != batch.getInt()) ||
+        batch.getInt() % tile.getInt() != 0)
+      return schedule.emitError("invalid batch tile");
+  }
   unsigned completed = 0;
   unsigned staged = 0;
   bool cpuVisible = false, clean = false, terminal = false;
@@ -146,6 +153,8 @@ struct LowerModel : PassWrapper<LowerModel, OperationPass<ModuleOp>> {
     auto abiType = builder.getFunctionType({}, {});
     auto schedule = builder.create<func::FuncOp>(location, "run_schedule", abiType);
     schedule->setAttr("int8.layers", builder.getI32IntegerAttr(third ? 3 : 2));
+    schedule->setAttr("int8.batch", builder.getI32IntegerAttr(samples));
+    schedule->setAttr("int8.input_width", builder.getI32IntegerAttr(width));
     builder.setInsertionPointToStart(schedule.addEntryBlock());
     auto emit = [&](StringRef name) {
       builder.create<func::CallOp>(location, name, TypeRange{}, ValueRange{});
@@ -194,6 +203,30 @@ struct LowerModel : PassWrapper<LowerModel, OperationPass<ModuleOp>> {
     }
   }
 };
+// This pass keeps each layer's ownership boundary intact. The runtime
+// splits its blocking DMA call into contiguous slices of the same buffers.
+struct TileBatch : PassWrapper<TileBatch, OperationPass<ModuleOp>> {
+  TileBatch(StringRef policy, bool contended)
+      : policy(policy.str()), contended(contended) {}
+
+  void runOnOperation() override {
+    auto schedule = getOperation().lookupSymbol<func::FuncOp>("run_schedule");
+    auto batch = schedule->getAttrOfType<IntegerAttr>("int8.batch").getInt();
+    auto width = schedule->getAttrOfType<IntegerAttr>("int8.input_width").getInt();
+    // Prefer fewer descriptors unless contention and descriptor work favor
+    // publishing completions at smaller intervals.
+    int64_t tile = batch;
+    if (policy == "four" || (policy == "auto" && contended && batch * (width / 4) > 64))
+      tile = 4;
+    schedule->setAttr("int8.tile_vectors", IntegerAttr::get(
+        IntegerType::get(&getContext(), 32), tile));
+    if (failed(verifySchedule(schedule)))
+      signalPassFailure();
+  }
+
+  std::string policy;
+  bool contended;
+};
 } // namespace
 
 int main(int argc, char **argv) {
@@ -201,6 +234,9 @@ int main(int argc, char **argv) {
   llvm::cl::opt<bool> staged("force-staging", llvm::cl::desc("Disable DMA chaining"));
   llvm::cl::opt<std::string> header("emit-header", llvm::cl::desc("Write firmware schedule"));
   llvm::cl::opt<bool> verifyOnly("verify-schedule", llvm::cl::desc("Verify lowered buffer lifetimes"));
+  llvm::cl::opt<std::string> tile("batch-tiling", llvm::cl::init("full"),
+                                 llvm::cl::desc("full, four, or auto"));
+  llvm::cl::opt<bool> contended("axi-contention");
   llvm::cl::ParseCommandLineOptions(argc, argv);
   DialectRegistry registry;
   registry.insert<func::FuncDialect>();
@@ -210,8 +246,13 @@ int main(int argc, char **argv) {
     return 1;
   if (verifyOnly)
     return failed(verifySchedule(module->lookupSymbol<func::FuncOp>("run_schedule")));
+  if (tile != "full" && tile != "four" && tile != "auto") {
+    llvm::errs() << "unknown batch tiling policy\n";
+    return 1;
+  }
   PassManager manager(&context);
   manager.addPass(std::make_unique<LowerModel>(!staged));
+  manager.addPass(std::make_unique<TileBatch>(tile.getValue(), contended));
   if (failed(manager.run(*module)))
     return 1;
   module->print(llvm::outs());
@@ -224,8 +265,12 @@ int main(int argc, char **argv) {
     }
     file << "/* Generated from MLIR. */\n";
     auto schedule = module->lookupSymbol<func::FuncOp>("run_schedule");
+    file << "#ifdef MLIR_SCHEDULE_CONFIG\n#define MLIR_TILE_VECTORS "
+         << schedule->getAttrOfType<IntegerAttr>("int8.tile_vectors").getInt()
+         << "\n#else\n";
     bool three = schedule->getAttrOfType<IntegerAttr>("int8.layers").getInt() == 3;
     for (auto call : schedule.getOps<func::CallOp>())
       file << (three ? "if (ok) ok = " : "ok &= ") << call.getCallee() << "();\n";
+    file << "#endif\n";
   }
 }

@@ -1,5 +1,14 @@
 #include <stdint.h>
 #include "mlp_vectors.h"
+#ifdef MLIR_SCHEDULE
+#define MLIR_SCHEDULE_CONFIG
+#include MLIR_SCHEDULE
+#undef MLIR_SCHEDULE_CONFIG
+#endif
+#ifndef MLIR_TILE_VECTORS
+#define MLIR_TILE_VECTORS SAMPLES
+#endif
+_Static_assert(MLIR_TILE_VECTORS > 0 && SAMPLES % MLIR_TILE_VECTORS == 0, "invalid DMA tile");
 #ifndef INPUT_K
 #define INPUT_K 16
 #endif
@@ -55,12 +64,12 @@ static void __attribute__((interrupt("machine"))) completion_handler(void) {
     completion_irq = 1;
 }
 
-static unsigned offload_tagged(unsigned bank, unsigned k, uint32_t input, uint32_t output,
+static unsigned submit_tile(unsigned bank, unsigned k, uint32_t input, uint32_t output,
                                unsigned expected_fault, unsigned tag) {
     DMA(0) = input + 0x70000000u;
     DMA(4) = output + 0x70000000u;
     DMA(8) = (4u << 16) | k;
-    DMA(12) = (SAMPLES << 7) | k;
+    DMA(12) = (MLIR_TILE_VECTORS << 7) | k;
     DMA(16) = ((7u + bank) << 17) | (bank << 16) | (1u << 8) | tag;
     DMA(20) = DMA_QOS;
     completion_irq = 0;
@@ -75,8 +84,17 @@ static unsigned offload_tagged(unsigned bank, unsigned k, uint32_t input, uint32
         return (status & 15u) == (RETRY >= 2 ? 3u : 5u) && ((status >> 12) & 127u) == 2 &&
                (metadata & 255u) == tag && ((metadata >> 8) & 7u) == (RETRY >= 2 ? 3u : 4u) &&
                fault_address == output + 0x70000008u;
-    return (status & 15u) == 0 && ((status >> 12) & 127u) == SAMPLES &&
+    return (status & 15u) == 0 && ((status >> 12) & 127u) == MLIR_TILE_VECTORS &&
            (metadata & 255u) == tag;
+}
+
+static unsigned offload_tagged(unsigned bank, unsigned k, uint32_t input, uint32_t output,
+                               unsigned expected_fault, unsigned tag) {
+    for (unsigned offset = 0; offset < SAMPLES; offset += MLIR_TILE_VECTORS)
+        if (!submit_tile(bank, k, input + offset * k, output + offset * 4,
+                         expected_fault, tag))
+            return 0;
+    return 1;
 }
 
 static unsigned offload(unsigned bank, unsigned k, uint32_t input, uint32_t output,

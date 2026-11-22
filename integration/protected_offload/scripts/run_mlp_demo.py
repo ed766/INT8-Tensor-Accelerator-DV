@@ -146,7 +146,7 @@ def compile_rtl(define=""):
     return folder / "Vtb_rv32_protected_shared"
 
 
-def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos, beats=4, staged=False, samples=SAMPLES, input_k=16, layers=2):
+def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos, beats=4, staged=False, samples=SAMPLES, input_k=16, layers=2, tile=None):
     records = list(events(trace))
     published = [event for event in records if event["kind"] == "COMPLETE_PUBLISH"]
     reads = [event for event in records if event["kind"] == "MEM_RSP" and event["write"] == "0"]
@@ -161,9 +161,10 @@ def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos, beats
         require(not published and not reads and not writes, name + " scalar DMA isolation")
         return dict(mode=name, cycles=cycles, dma_bytes=0, contenders=0, overlap_cycles=0,
                     dma_max_ar_wait=0, contender_max_ar_wait=0, cross_bins=0, descriptor_min=0, descriptor_max=0, clean_final_line_event="", peer_burst_event="", completion_samples=0, completion_p50="", completion_p99="", **waits)
-    tags = [str(97 + i) for i in range(layers)]
+    tile = samples if tile is None else tile
+    tags = [str(97 + i) for i in range(layers) for _ in range(samples // tile)]
     require([(e["tag"], e["status"], e["vectors_done"]) for e in published] ==
-            [(tag, "0", str(samples)) for tag in tags], name + " completions")
+            [(tag, "0", str(tile)) for tag in tags], name + " completions")
     require(len(reads) == (input_k // 4 + layers - 1) * samples and len(writes) == layers * samples, name + " DMA accounting")
     require(all(event["error"] == "0" for event in reads), name + " read status")
     for base, words in expected.items():
@@ -192,12 +193,18 @@ def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos, beats
         require(not contenders and not overlap, name + " idle fabric control")
     else:
         require(contenders and overlap and seen_peer == contender_qos, name + " competing AR and QoS witness")
-    starts = {e["tag"]: int(e["cycle"]) for e in records if e["kind"] == "SUBMIT"}
+    starts = [e for e in records if e["kind"] == "SUBMIT"]
     consumed = [e for e in records if e["kind"] == "COMPLETE"]
     interrupts = [e for e in records if e["kind"] == "RETIRE" and e.get("intr") == "1"]
-    require([e["tag"] for e in consumed] == tags and len(interrupts) == layers,
+    require([e["tag"] for e in consumed] == tags and len(interrupts) == len(tags),
             name + " interrupt-driven completion")
-    durations = sorted(int(e["cycle"]) - starts[e["tag"]] for e in consumed)
+    require([e["tag"] for e in starts] == tags, name + " ordered descriptor submissions")
+    require(all(int(start["cycle"]) < int(done["cycle"]) and
+                (i == 0 or int(consumed[i - 1]["cycle"]) <= int(start["cycle"]))
+                for i, (start, done) in enumerate(zip(starts, consumed))),
+            name + " blocking tile ownership")
+    durations = sorted(int(done["cycle"]) - int(start["cycle"])
+                       for start, done in zip(starts, consumed))
     def percentile(fraction):
         return durations[math.ceil(len(durations) * fraction) - 1]
     return dict(mode=name, cycles=cycles, dma_bytes=4 * (len(reads) + len(writes)),

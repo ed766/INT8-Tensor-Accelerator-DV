@@ -1,6 +1,7 @@
 """Check MLIR schedule legality and execute generated firmware on the RTL."""
 import csv
 import hashlib
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -179,6 +180,77 @@ def check_three_layers(tool, filecheck, executable):
     print(report.read_text(), end="")
 
 
+def check_batch_tiling(tool, executable):
+    report = demo.BUILD / "batch_tiling.csv"
+    report.unlink(missing_ok=True)
+    rows = []
+    completion_budget = 1000
+    shapes = (
+        ("calibration", 8, 16, 2), ("calibration", 16, 32, 2),
+        ("calibration", 16, 64, 2), ("held_out", 16, 8, 2),
+        ("held_out", 8, 32, 2), ("held_out", 8, 64, 3),
+    )
+    for group, batch, width, layers in shapes:
+        name = f"tiles_b{batch}_k{width}_l{layers}"
+        expected = export_fx(compile_model(name, 813, build_model(813, width, layers, 1),
+                                          width, samples=batch), demo.BUILD)
+        candidates = {}
+        for policy in ("full", "four", "auto"):
+            mode = f"{name}_{policy}"
+            header = demo.BUILD / f"{mode}.inc"
+            lowered = subprocess.check_output(
+                [tool, str(demo.BUILD / f"{name}.mlir"), "--axi-contention",
+                 f"--batch-tiling={policy}", f"--emit-header={header}"], text=True)
+            tile = int(re.search(r"int8.tile_vectors = (\d+)", lowered)[1])
+            path = demo.BUILD / f"{mode}.mlir"
+            path.write_text(lowered)
+            subprocess.run([tool, "--verify-schedule", str(path)], check=True)
+            trace, log = demo.run_case(executable, mode, contender=15, schedule=header)
+            measured = demo.check_case(mode, trace, log, expected, False, 8, 15,
+                                       samples=batch, input_k=width, layers=layers, tile=tile)
+            submissions = [e for e in demo.events(trace) if e.get("kind") == "SUBMIT"]
+            buffers = [0x8000101C, 0x8000401C, 0x8000601C]
+            if layers == 3:
+                buffers.insert(2, 0x8000701C)
+            expected_ranges = [
+                (buffers[layer] + offset * k, buffers[layer + 1] + offset * 4, tile)
+                for layer, k in enumerate([width] + [4] * (layers - 1))
+                for offset in range(0, batch, tile)
+            ]
+            demo.require([(int(e["input_iova"], 16), int(e["output_iova"], 16),
+                          int(e["batch"])) for e in submissions] == expected_ranges,
+                         mode + " contiguous tile coverage")
+            candidates[policy] = measured
+            if policy == "auto":
+                viable = [key for key in ("full", "four")
+                          if candidates[key]["descriptor_max"] <= completion_budget]
+                best = min(viable, key=lambda key: candidates[key]["cycles"]) if viable else None
+                demo.require(best is not None and tile == (batch if best == "full" else 4)
+                             and measured["descriptor_max"] <= completion_budget,
+                             mode + " fastest measured option within the evaluation budget")
+            rows.append(dict(group=group, batch=batch, input_width=width, layers=layers,
+                             policy=policy, tile_vectors=tile, cycles=measured["cycles"],
+                             descriptors=len(submissions), dma_bytes=measured["dma_bytes"],
+                             max_completion_cycles=measured["descriptor_max"],
+                             overlap_cycles=measured["overlap_cycles"],
+                             dma_max_ar_wait=measured["dma_max_ar_wait"],
+                             trace_sha256=hashlib.sha256(trace.read_bytes()).hexdigest()))
+    last_model = demo.BUILD / "tiles_b8_k64_l3.mlir"
+    idle = subprocess.check_output([tool, str(last_model), "--batch-tiling=auto"], text=True)
+    demo.require("int8.tile_vectors = 8 : i32" in idle, "idle policy keeps full batch")
+    bad_tile = demo.BUILD / "illegal_tile.mlir"
+    bad_tile.write_text(idle.replace("int8.tile_vectors = 8", "int8.tile_vectors = 0"))
+    rejected = subprocess.run([tool, "--verify-schedule", str(bad_tile)],
+                              text=True, capture_output=True)
+    demo.require(rejected.returncode != 0 and "invalid batch tile" in rejected.stderr,
+                 "reject illegal lowered tile")
+    with report.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=rows[0])
+        writer.writeheader()
+        writer.writerows(rows)
+    print(report.read_text(), end="")
+
+
 def main():
     tool, filecheck = (str(Path(arg).resolve()) for arg in sys.argv[1:])
     demo.BUILD = ROOT / "build/int8-mlir/rtl"
@@ -266,6 +338,7 @@ def main():
         writer.writerows(rows)
     print(matrix.read_text(), end="")
     check_three_layers(tool, filecheck, executable)
+    check_batch_tiling(tool, executable)
 
 
 if __name__ == "__main__":

@@ -96,7 +96,7 @@ jobs:
           export OSS_CAD_SUITE="$(realpath "$suite")"
           "$OSS_CAD_SUITE/bin/sby" --version
           make protected-offload-release-check
-      - name: Test FX-to-MLIR lowering and buffer lifetimes
+      - name: Test MLIR lowering, lifetimes, and batch tiling
         if: matrix.lane == 'mlir'
         run: |
           sudo apt-get install -y cmake llvm-19-dev llvm-19-tools libmlir-19-dev mlir-19-tools
