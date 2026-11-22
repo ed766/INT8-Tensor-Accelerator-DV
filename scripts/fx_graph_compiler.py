@@ -68,24 +68,35 @@ def build_model(seed: int, input_k: int, layer_count: int, relu_mask: int) -> nn
     return nn.Sequential(*modules).eval()
 
 
-def compile_model(name: str, seed: int, model: nn.Module, input_k: int) -> GraphProgram:
+def compile_model(name: str, seed: int, model: nn.Module, input_k: int, *, samples: int = 4) -> GraphProgram:
     traced = symbolic_trace(model)
     modules = dict(traced.named_modules())
     nodes = [f"{node.op}:{node.target}" for node in traced.graph.nodes]
     linear_nodes: list[tuple[str, nn.Linear, bool]] = []
     graph_nodes = list(traced.graph.nodes)
-    for index, node in enumerate(graph_nodes):
-        if node.op in {"placeholder", "output"}:
+    if samples < 1 or graph_nodes[0].op != "placeholder":
+        raise ValueError(f"{name}: expected a single input and a positive batch size")
+    previous = graph_nodes[0]
+    for index, node in enumerate(graph_nodes[1:], start=1):
+        if node.args != (previous,) or node.kwargs:
+            raise ValueError(f"{name}: expected a single sequential tensor path at {node.name}")
+        previous = node
+        if node.op == "output":
             continue
         if node.op != "call_module":
             raise ValueError(f"{name}: unsupported FX operation {node.op}:{node.target}")
         module = modules[str(node.target)]
         if isinstance(module, nn.ReLU):
+            if index < 2 or not isinstance(modules.get(str(graph_nodes[index - 1].target)), nn.Linear):
+                raise ValueError(f"{name}: ReLU must immediately follow a Linear")
             continue
         if not isinstance(module, nn.Linear):
             raise ValueError(f"{name}: unsupported module {type(module).__name__}")
         if module.out_features != OUTPUTS or module.in_features not in {4, 8, 16, 32, 64}:
             raise ValueError(f"{name}: Linear geometry {module.in_features}x{module.out_features} is unsupported")
+        expected_width = OUTPUTS if linear_nodes else input_k
+        if module.in_features != expected_width:
+            raise ValueError(f"{name}: expected Linear input width {expected_width}")
         relu = False
         if index + 1 < len(graph_nodes):
             next_node = graph_nodes[index + 1]
@@ -95,7 +106,7 @@ def compile_model(name: str, seed: int, model: nn.Module, input_k: int) -> Graph
         raise ValueError(f"{name}: requires 1..{MAX_LAYERS} Linear layers")
 
     generator = torch.Generator().manual_seed(seed ^ 0xF00D)
-    float_inputs = torch.randn((4, input_k), generator=generator) * 0.6
+    float_inputs = torch.randn((samples, input_k), generator=generator) * 0.6
     input_scale = max(float(float_inputs.abs().max()) / 96.0, 1e-9)
     quant = torch.clamp(torch.round(float_inputs / input_scale), -128, 127).to(torch.int64)
     inputs = quant.tolist()

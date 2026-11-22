@@ -1,5 +1,8 @@
 #include <stdint.h>
 #include "mlp_vectors.h"
+#ifndef INPUT_K
+#define INPUT_K 16
+#endif
 
 #define REG(address) (*(volatile uint32_t *)(uintptr_t)(address))
 #define DMA(offset) REG(0x40000000u + (offset))
@@ -104,7 +107,7 @@ static void scalar(unsigned bank, unsigned k, uint32_t input, uint32_t output,
 #ifdef MLIR_SCHEDULE
 #define STAGED 0x10009000u
 
-static unsigned dma_layer1(void) { return offload(0, 16, INPUT, HIDDEN, 0); }
+static unsigned dma_layer1(void) { return offload(0, INPUT_K, INPUT, HIDDEN, 0); }
 static unsigned dma_layer2_hidden(void) { return offload(1, 4, HIDDEN, OUTPUT, 0); }
 static unsigned dma_layer2_staged(void) { return offload(1, 4, STAGED, OUTPUT, 0); }
 static unsigned invalidate_hidden(void) { maintain(1); return 1; }
@@ -132,7 +135,7 @@ int main(void) {
     REG(0x30001004u) = 0x040004cfu;
     REG(0x30001010u) = 0x040010cfu;
     REG(0x30001018u) = 0x040018cfu;
-    for (unsigned i = 0; i < SAMPLES * 4; ++i) REG(INPUT + 4 * i) = inputs[i];
+    for (unsigned i = 0; i < SAMPLES * (INPUT_K / 4); ++i) REG(INPUT + 4 * i) = inputs[i];
     for (unsigned i = 0; i < SAMPLES; ++i) {
         REG(HIDDEN + 4 * i) = GUARD;
         REG(OUTPUT + 4 * i) = GUARD;
@@ -141,14 +144,14 @@ int main(void) {
     REG(OUTPUT - 4) = REG(OUTPUT + SAMPLES * 4) = GUARD;
 
     if (SCALAR) {
-        scalar(0, 16, INPUT, HIDDEN, w1, b1, SHIFT1);
+        scalar(0, INPUT_K, INPUT, HIDDEN, w1, b1, SHIFT1);
         scalar(1, 4, HIDDEN, OUTPUT, w2, b2, SHIFT2);
         maintain(0);
     } else {
         __asm__ volatile("csrw mtvec, %0; csrsi mstatus, 8" ::
                          "r"((uintptr_t)completion_handler) : "memory");
         REG(0x40002008u) = 2;
-        load_layer(0, 16, w1, b1, SHIFT1);
+        load_layer(0, INPUT_K, w1, b1, SHIFT1);
         load_layer(1, 4, w2, b2, SHIFT2);
         CFG(16) = 0x0807u;
         maintain(0);
@@ -156,7 +159,7 @@ int main(void) {
         REG(0x30001024u) = 0x040024cfu;
 #include MLIR_SCHEDULE
 #else
-        ok &= offload(0, 16, INPUT, HIDDEN, 0);
+        ok &= offload(0, INPUT_K, INPUT, HIDDEN, 0);
 #if RETRY
         ok &= offload(1, 4, HIDDEN, OUTPUT, 1);
         maintain(1);

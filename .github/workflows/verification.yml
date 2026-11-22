@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        lane: [accelerator, protected-offload]
+        lane: [accelerator, protected-offload, mlir]
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -96,6 +96,13 @@ jobs:
           export OSS_CAD_SUITE="$(realpath "$suite")"
           "$OSS_CAD_SUITE/bin/sby" --version
           make protected-offload-release-check
+      - name: Build and test the FX-to-MLIR backend
+        if: matrix.lane == 'mlir'
+        run: |
+          sudo apt-get install -y cmake llvm-19-dev llvm-19-tools libmlir-19-dev mlir-19-tools
+          cmake -S compiler/mlir -B build/int8-mlir -DMLIR_DIR=/usr/lib/llvm-19/lib/cmake/mlir
+          cmake --build build/int8-mlir --parallel 2
+          python3 compiler/mlir/compare.py build/int8-mlir/int8-opt /usr/lib/llvm-19/bin/FileCheck
       - name: Require reproducible standalone reports
         if: matrix.lane == 'accelerator'
         run: git diff --exit-code
@@ -111,3 +118,7 @@ jobs:
             int8_tensor_accelerator_dv/build/protected_offload/mlp_demo/summary.csv
             int8_tensor_accelerator_dv/build/protected_offload/mlp_demo/evidence.json
             int8_tensor_accelerator_dv/build/protected_offload/dma_stall_faults/**/*.log
+            int8_tensor_accelerator_dv/build/int8-mlir/rtl/*.csv
+            int8_tensor_accelerator_dv/build/int8-mlir/rtl/*.mlir
+            int8_tensor_accelerator_dv/build/int8-mlir/rtl/*/crossover.trace
+            int8_tensor_accelerator_dv/build/int8-mlir/rtl/*/simulation.log

@@ -146,7 +146,7 @@ def compile_rtl(define=""):
     return folder / "Vtb_rv32_protected_shared"
 
 
-def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos, beats=4, staged=False):
+def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos, beats=4, staged=False, samples=SAMPLES, input_k=16):
     records = list(events(trace))
     published = [event for event in records if event["kind"] == "COMPLETE_PUBLISH"]
     reads = [event for event in records if event["kind"] == "MEM_RSP" and event["write"] == "0"]
@@ -162,11 +162,11 @@ def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos, beats
         return dict(mode=name, cycles=cycles, dma_bytes=0, contenders=0, overlap_cycles=0,
                     dma_max_ar_wait=0, contender_max_ar_wait=0, cross_bins=0, descriptor_min=0, descriptor_max=0, clean_final_line_event="", peer_burst_event="", completion_samples=0, completion_p50="", completion_p99="", **waits)
     require([(e["tag"], e["status"], e["vectors_done"]) for e in published] ==
-            [("97", "0", str(SAMPLES)), ("98", "0", str(SAMPLES))], name + " completions")
-    require(len(reads) == 5 * SAMPLES and len(writes) == 2 * SAMPLES, name + " DMA accounting")
+            [("97", "0", str(samples)), ("98", "0", str(samples))], name + " completions")
+    require(len(reads) == (input_k // 4 + 1) * samples and len(writes) == 2 * samples, name + " DMA accounting")
     require(all(event["error"] == "0" for event in reads), name + " read status")
     for base, words in expected.items():
-        require([by_address.get(base + 4 * i) for i in range(SAMPLES)] == words,
+        require([by_address.get(base + 4 * i) for i in range(samples)] == words,
                 name + " PyTorch output compare")
     maintenance = [e for e in records if e["kind"] == "MAINT_DONE"]
     require([(e["cmd"], e["error"]) for e in maintenance] == (
@@ -175,11 +175,11 @@ def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos, beats
     require(int(maintenance[0]["cycle"]) < int(reads[0]["cycle"]) <
             int(published[0]["cycle"]) < int(published[1]["cycle"]) <
             int(maintenance[-1]["cycle"]), name + " ownership timeline")
-    clean_start = next(e for e in records if e["kind"] == "MAINT_START")
     clean_lines = {int(e["addr"], 16): e["eid"] for e in records
                    if e["kind"] == "AXI_AW" and e["master"] == "0" and e["len"] == "3"
-                   and int(clean_start["cycle"]) <= int(e["cycle"]) <= int(maintenance[0]["cycle"])}
-    require(0x10001080 in clean_lines, name + " final input cache line written back")
+                   and int(e["cycle"]) <= int(maintenance[0]["cycle"])}
+    final_input_line = (0x1000101c + samples * input_k - 1) & ~31
+    require(final_input_line in clean_lines, name + " final input cache line written back")
     peer_bursts = [e for e in records if e["kind"] == "AXI_AR" and e["master"] == "3"
                    and e["addr"] == "1000f000" and e["len"] == str(beats - 1)]
     matches = re.findall(r"MLP_AXI\|contenders=(\d+)\|overlap=(\d+)\|dma_wait=(\d+)\|contender_wait=(\d+)\|qos=(\d+)\|peer_qos=(\d+)", log)
@@ -202,7 +202,7 @@ def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos, beats
     return dict(mode=name, cycles=cycles, dma_bytes=4 * (len(reads) + len(writes)),
                 contenders=contenders, overlap_cycles=overlap, dma_max_ar_wait=dma_wait,
                 contender_max_ar_wait=contender_wait, cross_bins=1, descriptor_min=min(durations), descriptor_max=max(durations),
-                clean_final_line_event=clean_lines[0x10001080],
+                clean_final_line_event=clean_lines[final_input_line],
                 peer_burst_event=peer_bursts[0]["eid"] if peer_bursts else "",
                 completion_samples=len(durations), completion_p50=percentile(.5),
                 completion_p99=percentile(.99), **waits)

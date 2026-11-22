@@ -6,10 +6,91 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts"))
+from fx_graph_compiler import build_model, compile_model
+from torch import nn
+
 sys.path.insert(0, str(ROOT / "integration/protected_offload/scripts"))
 import run_mlp_demo as demo
 
 HERE = Path(__file__).resolve().parent
+
+
+def export_fx(program, folder):
+    first, second = program.layers
+    samples = len(program.inputs)
+    if first.k != program.input_k or second.k != 4 or not first.relu or second.relu:
+        raise ValueError("Expected Linear/ReLU followed by Linear")
+    from_type = f"tensor<{samples}x{program.input_k}xi8>"
+    to_type = f"tensor<{samples}x4xi8>"
+    source = f"""module {{
+  func.func private @linear_relu({from_type}) -> {to_type}
+  func.func private @linear({to_type}) -> {to_type}
+  func.func @model(%input: {from_type}) -> {to_type}
+      attributes {{int8.quantization = "signed-i8-nearest-away-saturate-v1"}} {{
+    %hidden = func.call @linear_relu(%input) : ({from_type}) -> {to_type}
+    %output = func.call @linear(%hidden) : ({to_type}) -> {to_type}
+    return %output : {to_type}
+  }}
+}}
+"""
+    (folder / f"{program.name}.mlir").write_text(source)
+
+    def pack(samples):
+        return [sum((value & 255) << (8 * lane)
+                    for lane, value in enumerate(sample[i:i + 4]))
+                for sample in samples for i in range(0, len(sample), 4)]
+
+    hidden, output = [pack([sample[layer] for sample in program.expected])
+                      for layer in range(2)]
+    arrays = (
+        ("uint32_t", "inputs", pack(program.inputs)),
+        ("int8_t", "w1", [v for row in first.weights for v in row]),
+        ("int8_t", "w2", [v for row in second.weights for v in row]),
+        ("int32_t", "b1", first.biases), ("int32_t", "b2", second.biases),
+        ("uint32_t", "expected_hidden", hidden), ("uint32_t", "expected_output", output),
+    )
+    header = [f"#define SAMPLES {samples}", f"#define INPUT_K {first.k}",
+              f"#define SHIFT1 {first.shift}", f"#define SHIFT2 {second.shift}"]
+    for kind, name, values in arrays:
+        header.append(f"static const {kind} {name}[] = {{{', '.join(map(str, values))}}};")
+    (folder / "mlp_vectors.h").write_text("\n".join(header) + "\n")
+    return {demo.HIDDEN: hidden, demo.OUTPUT: output}
+
+
+def check_fx_matrix(tool, filecheck, executable):
+    rows = []
+    for samples, width in ((4, 8), (8, 32), (16, 64)):
+        name = f"fx_b{samples}_k{width}"
+        program = compile_model(name, 2601, build_model(2601, width, 2, 1), width, samples=samples)
+        expected = export_fx(program, demo.BUILD)
+        for schedule, check in (("staged", "STAGED"), ("chained", "CHAIN")):
+            staged = schedule == "staged"
+            variant = f"{name}_{schedule}"
+            header = demo.BUILD / f"{variant}.inc"
+            lowered = subprocess.check_output(
+                [tool, str(demo.BUILD / f"{name}.mlir"), f"--emit-header={header}",
+                 *(["--force-staging"] if staged else [])], text=True)
+            subprocess.run([filecheck, str(HERE / "checks.txt"), f"--check-prefix={check}"],
+                           input=lowered, text=True, check=True)
+            (demo.BUILD / f"{variant}.mlir").write_text(lowered)
+            for load, peer in (("idle", None), ("contended", 15)):
+                trace, log = demo.run_case(executable, f"{variant}_{load}", contender=peer,
+                                           schedule=header)
+                row = demo.check_case(variant, trace, log, expected, False, 8, peer,
+                                      staged=staged, samples=samples, input_k=width)
+                stage = 0x10009000 if staged else demo.HIDDEN
+                reads = [event for event in demo.events(trace) if event.get("kind") == "MEM_RSP"
+                         and event.get("write") == "0" and event.get("tag") == "98"]
+                demo.require([int(event["addr"], 16) for event in reads] ==
+                             [stage + 4 * i for i in range(samples)], variant + " DMA input")
+                rows.append(dict(batch=samples, input_width=width, schedule=schedule, load=load,
+                                 cycles=row["cycles"], dma_bytes=row["dma_bytes"],
+                                 maintenance_ops=4 if staged else 2,
+                                 overlap_cycles=row["overlap_cycles"],
+                                 dma_max_ar_wait=row["dma_max_ar_wait"],
+                                 trace_sha256=hashlib.sha256(trace.read_bytes()).hexdigest()))
+    return rows
 
 
 def main():
@@ -27,13 +108,29 @@ def main():
     )))
     for name, invalid_source in (
         ("rounding", source.replace("nearest-away", "truncate")),
-        ("shape", source.replace("16x16xi8", "8x16xi8")),
+        ("shape", source.replace("16x16xi8", "16x12xi8")),
     ):
         bad = demo.BUILD / f"bad-{name}.mlir"
         bad.write_text(invalid_source)
         rejected = subprocess.run([tool, str(bad)], capture_output=True, text=True)
-        demo.require(rejected.returncode != 0 and "quantization contract" in rejected.stderr,
+        demo.require(rejected.returncode != 0 and ("unsupported model shape" if name == "shape" else "quantization contract") in rejected.stderr,
                      f"reject unsupported {name}")
+    class Disconnected(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.first = nn.Linear(4, 4)
+            self.second = nn.Linear(4, 4)
+
+        def forward(self, value):
+            self.first(value)
+            return self.second(value)
+
+    try:
+        compile_model("disconnected", 2601, Disconnected(), 4)
+    except ValueError as error:
+        demo.require("single sequential tensor path" in str(error), "wrong FX rejection")
+    else:
+        raise RuntimeError("FX importer accepted a disconnected graph")
     expected = demo.export_vectors()
     executable = demo.compile_rtl()
     results = []
@@ -74,6 +171,14 @@ def main():
         writer.writeheader()
         writer.writerows(results)
     print(report.read_text(), end="")
+    matrix = demo.BUILD / "fx_comparison.csv"
+    matrix.unlink(missing_ok=True)
+    rows = check_fx_matrix(tool, filecheck, executable)
+    with matrix.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=rows[0])
+        writer.writeheader()
+        writer.writerows(rows)
+    print(matrix.read_text(), end="")
 
 
 if __name__ == "__main__":

@@ -24,8 +24,18 @@ struct LowerModel : PassWrapper<LowerModel, OperationPass<ModuleOp>> {
       return reject("expected one model block");
 
     OpBuilder builder(module.getContext());
-    auto input = RankedTensorType::get({16, 16}, builder.getI8Type());
-    auto output = RankedTensorType::get({16, 4}, builder.getI8Type());
+    auto signature = model.getFunctionType();
+    auto input = signature.getNumInputs() == 1
+                     ? dyn_cast<RankedTensorType>(signature.getInput(0))
+                     : RankedTensorType{};
+    if (!input || input.getRank() != 2 || !input.getElementType().isInteger(8))
+      return reject("unsupported model shape");
+    int64_t samples = input.getDimSize(0);
+    int64_t width = input.getDimSize(1);
+    if ((samples != 4 && samples != 8 && samples != 16) ||
+        (width != 4 && width != 8 && width != 16 && width != 32 && width != 64))
+      return reject("unsupported model shape");
+    auto output = RankedTensorType::get({samples, 4}, builder.getI8Type());
     auto quantization = model->getAttrOfType<StringAttr>("int8.quantization");
     if (model.getFunctionType() != builder.getFunctionType({input}, {output}) ||
         !quantization || quantization.getValue() != "signed-i8-nearest-away-saturate-v1")

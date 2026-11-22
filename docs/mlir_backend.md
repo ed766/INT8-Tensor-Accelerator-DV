@@ -1,7 +1,8 @@
 # Compiling a two-layer model for the INT8 accelerator
 
-**DMA chaining cut simulated firmware cycles by 8.8%** for the same
-quantized model and 16 inputs. The compiler kept the intermediate activation
+**DMA chaining saved 3.5–8.7% under AXI contention across three models
+imported through torch.fx.** Both schedules were checked byte for byte
+against PyTorch. The fixed reference fixture also saved 8.8% at idle. The compiler kept the intermediate activation
 in shared memory and passed its address directly to the second DMA descriptor.
 This removed a CPU copy, 64 bytes of cache writeback, and two cache
 maintenance operations. Both schedules produced exactly the same bytes as
@@ -13,7 +14,7 @@ the PyTorch reference.
 | DMA chaining | 7,626 | 2 | 448 B | 0 B | 2 |
 | CPU consumer present, staging retained | 8,833 | 2 | 448 B | 64 B | 4 |
 
-The comparison uses the idle fabric and the same RTL, quantized weights,
+The fixed-fixture comparison uses the idle fabric and the same RTL, quantized weights,
 inputs, and firmware runtime. Cycles include buffer preparation, configuration,
 cache maintenance, and interrupt-driven completion. The measurements are
 simulation cycles.
@@ -24,8 +25,11 @@ The [input MLIR](../compiler/mlir/model.mlir) describes the fixed
 16→4→4 Linear/ReLU/Linear workload. A C++ MLIR pass validates the graph and
 lowers it to calls into the firmware scheduling ABI. The same pass emits
 a C include from those calls so the measured firmware executes the generated
-schedule. The model weights and input vectors come from the existing PyTorch
-fixture. This prototype accepts a fixed model shape and quantization contract.
+schedule. The FX importer supplies model geometry, weights, biases, shifts, inputs,
+and PyTorch expected results. The backend supports batches of 4, 8, or 16
+and input widths of 4, 8, 16, 32, or 64, with four outputs per layer.
+It accepts a linear two-layer graph and the existing signed INT8
+quantization contract.
 
 | Staged schedule | Chained schedule |
 | --- | --- |
@@ -42,6 +46,22 @@ The RTL runner checks the actual second-layer input addresses, successful
 completions, cache writebacks before handoff, and exact PyTorch equality for
 intermediate and final data.
 
+## FX models under contention
+
+| Batch × input width | Idle staged → chained | Contended staged → chained | Contended cycles saved |
+| --- | ---: | ---: | ---: |
+| 4 × 8 | 4,596 → 4,187 | 4,614 → 4,211 | 403 (8.7%) |
+| 8 × 32 | 10,003 → 9,520 | 10,087 → 9,604 | 483 (4.8%) |
+| 16 × 64 | 20,772 → 20,034 | 21,114 → 20,382 | 732 (3.5%) |
+
+The contender issues four-beat reads at QoS 15 while descriptor DMA uses
+QoS 8. All six contended runs observed concurrent DMA and contender
+requests and a five-cycle maximum DMA read-address wait. Each schedule
+uses two descriptors. Chaining halves cache maintenance from four
+operations to two and preserves DMA payload for a given shape.
+The percentage gain shrinks on the largest shape because total execution
+takes more cycles even though chaining saves more cycles in absolute terms.
+
 ## Reproduce
 
 Use LLVM/MLIR 19 development libraries, FileCheck, a C++17 compiler, and the
@@ -55,4 +75,4 @@ python3 compiler/mlir/compare.py build/int8-mlir/int8-opt /usr/lib/llvm-19/bin/F
 
 The command runs FileCheck on all three schedules, checks rejection of invalid
 input, and writes lowered MLIR, firmware includes, trace logs, and
-`comparison.csv` under `build/int8-mlir/rtl`.
+`comparison.csv` and `fx_comparison.csv` under `build/int8-mlir/rtl`.
