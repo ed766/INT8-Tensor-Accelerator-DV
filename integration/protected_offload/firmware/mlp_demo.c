@@ -41,6 +41,13 @@ static void load_layer(unsigned bank, unsigned k, const int8_t *weights,
     }
 }
 
+static volatile unsigned completion_irq;
+
+static void __attribute__((interrupt("machine"))) completion_handler(void) {
+    __asm__ volatile("csrc mie, %0" :: "r"(0x800u) : "memory");
+    completion_irq = 1;
+}
+
 static unsigned offload(unsigned bank, unsigned k, uint32_t input, uint32_t output,
                         unsigned expected_fault) {
     const unsigned tag = 0x61u + bank;
@@ -50,10 +57,14 @@ static unsigned offload(unsigned bank, unsigned k, uint32_t input, uint32_t outp
     DMA(12) = (SAMPLES << 7) | k;
     DMA(16) = ((7u + bank) << 17) | (bank << 16) | (1u << 8) | tag;
     DMA(20) = DMA_QOS;
+    completion_irq = 0;
+    __asm__ volatile("csrs mie, %0" :: "r"(0x800u) : "memory");
     DMA(24) = 1;
-    while ((DMA(28) & 4u) == 0) {}
+    while (!completion_irq) {}
+
     unsigned status = DMA(32), metadata = DMA(40), fault_address = DMA(36);
     DMA(44) = 1;
+    REG(0x4000200cu) = 2;
     if (expected_fault)
         return (status & 15u) == 5 && ((status >> 12) & 127u) == 2 &&
                (metadata & 255u) == tag && ((metadata >> 8) & 7u) == 4 &&
@@ -106,6 +117,9 @@ int main(void) {
         scalar(1, 4, HIDDEN, OUTPUT, w2, b2, SHIFT2);
         maintain(0);
     } else {
+        __asm__ volatile("csrw mtvec, %0; csrsi mstatus, 8" ::
+                         "r"((uintptr_t)completion_handler) : "memory");
+        REG(0x40002008u) = 2;
         load_layer(0, 16, w1, b1, SHIFT1);
         load_layer(1, 4, w2, b2, SHIFT2);
         CFG(16) = 0x0807u;

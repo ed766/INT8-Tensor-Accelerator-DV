@@ -85,9 +85,17 @@ module tb_rv32_protected_shared #(parameter bit USE_CACHE=0,parameter bit CPU_EN
  always_ff@(posedge clk)if(commit_valid)commits<=commits+1;
  always_ff@(posedge clk)if(ENABLE_CHIPLET&&dut.chip_sel&&dut.penable)$display("CHIP_APB|addr=%08x|write=%0b|data=%08x|rdata=%08x",dut.paddr,dut.pwrite,dut.pwdata,dut.chip_rdata);
 `ifdef TEST_MLP_DEMO
+ int requester_wait[4], requester_max[4];
  int contenders, overlap, dma_wait, contender_wait, max_dma_wait, max_contender_wait;
  logic [3:0] observed_dma_qos, observed_peer_qos;
  always @(posedge clk) if (rst_n) begin
+   for (int i = 0; i < 4; i++) begin
+     if (dut.s_arvalid[i] && !dut.s_arready[i]) begin
+       requester_wait[i] <= requester_wait[i] + 1;
+       if (requester_wait[i] >= requester_max[i])
+         requester_max[i] <= requester_wait[i] + 1;
+     end else requester_wait[i] <= 0;
+   end
    if (dut.s_arvalid[1] && dut.s_arvalid[3]) overlap <= overlap + 1;
    if (dut.s_arvalid[1]) begin
      observed_dma_qos <= dut.s_arqos[1];
@@ -139,6 +147,7 @@ module tb_rv32_protected_shared #(parameter bit USE_CACHE=0,parameter bit CPU_EN
    repeat(400000)begin @(posedge clk);if(firmware_done)begin
    if(firmware_result!==32'h600d5000)$fatal(1,"firmware result %08x",firmware_result);
 `ifdef TEST_MLP_DEMO
+   $display("MLP_REQUESTER_WAIT|%0d|%0d|%0d|%0d", requester_max[0], requester_max[1], requester_max[2], requester_max[3]);
    $display("MLP_AXI|contenders=%0d|overlap=%0d|dma_wait=%0d|contender_wait=%0d|qos=%0d|peer_qos=%0d",
             contenders, overlap, max_dma_wait, max_contender_wait, observed_dma_qos, observed_peer_qos);
 `else

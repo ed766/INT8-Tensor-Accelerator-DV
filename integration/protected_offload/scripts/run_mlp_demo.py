@@ -3,6 +3,7 @@
 import csv
 import hashlib
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -118,13 +119,27 @@ def require(condition, message):
 def compile_rtl(define=""):
     folder = BUILD / (define or "obj")
     folder.mkdir(exist_ok=True)
+    rtl_sources = sources
+    if define == "MLP_MUT_SKIP_FINAL_LINE":
+        cache = next(source for source in sources if source.name == "l1_dcache_top.sv")
+        mutant = folder / cache.name
+        original = "end else if (dirty_bits[maint_way][maint_set] && maint_cmd_q != 2'd1) begin"
+        text = cache.read_text()
+        require(text.count(original) == 1, "unique maintenance mutation site")
+        modified = (
+            "end else if (dirty_bits[maint_way][maint_set] && maint_cmd_q != 2'd1 && "
+            "{tags[maint_way][maint_set], maint_set, {OFFSET_BITS{1'b0}}} "
+            "!= 32'h10001080) begin"
+        )
+        mutant.write_text(text.replace(original, modified))
+        rtl_sources = [mutant if source == cache else source for source in sources]
     with (folder / "compile.log").open("w") as log:
         subprocess.run(
             ["verilator", "--binary", "--timing", "--assert", "-j", "4", "-Wno-fatal",
              "--top-module", "tb_rv32_protected_shared", "-GUSE_CACHE=1'b1",
              "-GCPU_ENABLE_M=1'b1", "-DTEST_MLP_DEMO",
              *([f"-D{define}"] if define else []),
-             "--Mdir", str(folder), *map(str, sources)],
+             "--Mdir", str(folder), *map(str, rtl_sources)],
             cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=True,
         )
     return folder / "Vtb_rv32_protected_shared"
@@ -137,10 +152,14 @@ def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos):
     writes = [event for event in records if event["kind"] == "MEM_RSP" and event["committed"] == "1"]
     cycles = int(re.search(r"benchmark_cycles=(\d+)", log)[1])
     by_address = {int(event["addr"], 16): int(event["wdata"], 16) for event in writes}
+    wait_match = re.search(r"MLP_REQUESTER_WAIT\|(\d+)\|(\d+)\|(\d+)\|(\d+)", log)
+    require(wait_match is not None, name + " requester waits")
+    waits = dict(zip(("cache_max_ar_wait", "port1_max_ar_wait",
+                      "ptw_max_ar_wait", "port3_max_ar_wait"), map(int, wait_match.groups())))
     if scalar:
         require(not published and not reads and not writes, name + " scalar DMA isolation")
         return dict(mode=name, cycles=cycles, dma_bytes=0, contenders=0, overlap_cycles=0,
-                    dma_max_ar_wait=0, contender_max_ar_wait=0, cross_bins=0, descriptor_min=0, descriptor_max=0, clean_final_line_event="", peer_burst_event="")
+                    dma_max_ar_wait=0, contender_max_ar_wait=0, cross_bins=0, descriptor_min=0, descriptor_max=0, clean_final_line_event="", peer_burst_event="", completion_samples=0, completion_p50="", completion_p99="", **waits)
     require([(e["tag"], e["status"], e["vectors_done"]) for e in published] ==
             [("97", "0", str(SAMPLES)), ("98", "0", str(SAMPLES))], name + " completions")
     require(len(reads) == 5 * SAMPLES and len(writes) == 2 * SAMPLES, name + " DMA accounting")
@@ -171,12 +190,20 @@ def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos):
     else:
         require(contenders and overlap and seen_peer == contender_qos, name + " competing AR and QoS witness")
     starts = {e["tag"]: int(e["cycle"]) for e in records if e["kind"] == "SUBMIT"}
-    durations = sorted(int(e["cycle"]) - starts[e["tag"]] for e in published)
+    consumed = [e for e in records if e["kind"] == "COMPLETE"]
+    interrupts = [e for e in records if e["kind"] == "RETIRE" and e.get("intr") == "1"]
+    require([e["tag"] for e in consumed] == ["97", "98"] and len(interrupts) == 2,
+            name + " interrupt-driven completion")
+    durations = sorted(int(e["cycle"]) - starts[e["tag"]] for e in consumed)
+    def percentile(fraction):
+        return durations[math.ceil(len(durations) * fraction) - 1]
     return dict(mode=name, cycles=cycles, dma_bytes=4 * (len(reads) + len(writes)),
                 contenders=contenders, overlap_cycles=overlap, dma_max_ar_wait=dma_wait,
                 contender_max_ar_wait=contender_wait, cross_bins=1, descriptor_min=min(durations), descriptor_max=max(durations),
                 clean_final_line_event=clean_lines[0x10001080],
-                peer_burst_event=peer_bursts[0]["eid"] if peer_bursts else "")
+                peer_burst_event=peer_bursts[0]["eid"] if peer_bursts else "",
+                completion_samples=len(durations), completion_p50=percentile(.5),
+                completion_p99=percentile(.99), **waits)
 
 
 def main():
@@ -221,13 +248,26 @@ def main():
                 for e in mutated), "bypassed maintenance and final-line DMA read")
     evidence.append(dict(mode="skip_maintenance", trace=str(trace.relative_to(ROOT)),
                          trace_sha256=hashlib.sha256(trace.read_bytes()).hexdigest()))
+    trace, _ = run_case(compile_rtl("MLP_MUT_SKIP_FINAL_LINE"), "skip_final_line", mutation=True)
+    final_line_reads = [
+        e for e in events(trace) if e.get("kind") == "MEM_RSP"
+        and e.get("write") == "0" and e.get("addr") == "10001080"
+    ]
+    nominal_trace = BUILD / "idle/crossover.trace"
+    nominal = next(e for e in events(nominal_trace) if e.get("kind") == "MEM_RSP"
+                   and e.get("write") == "0" and e.get("addr") == "10001080")
+    require(len(final_line_reads) == 1 and final_line_reads[0]["rdata"] == "00000000"
+            and nominal["rdata"] != "00000000", "final line stale-read witness")
+    evidence.append(dict(mode="skip_final_line", trace=str(trace.relative_to(ROOT)),
+                         trace_sha256=hashlib.sha256(trace.read_bytes()).hexdigest(),
+                         failing_read=final_line_reads[0]["eid"], control_read=nominal["eid"]))
     (BUILD / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n")
     with (BUILD / "summary.csv").open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=rows[0], lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
     print((BUILD / "summary.csv").read_text(), end="")
-    print("MLP demo: 5/5 modes, 4/4 maintenance/QoS crosses, 1/1 committed-prefix retry cross, 1/1 maintenance mutation")
+    print("MLP demo: 5/5 modes, 4/4 maintenance/QoS crosses, 1/1 committed-prefix retry cross, 2/2 maintenance mutations")
 
 
 if __name__ == "__main__":
