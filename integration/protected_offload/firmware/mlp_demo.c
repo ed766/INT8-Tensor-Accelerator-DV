@@ -6,7 +6,11 @@
 #define CFG(offset) REG(0x40001000u + (offset))
 #define INPUT 0x1000101cu
 #define HIDDEN 0x1000401cu
+#if RETRY >= 2
+#define OUTPUT 0x10006ff8u
+#else
 #define OUTPUT 0x1000601cu
+#endif
 #define GUARD 0xa53c79e1u
 
 static uint32_t cycle(void) {
@@ -66,8 +70,8 @@ static unsigned offload(unsigned bank, unsigned k, uint32_t input, uint32_t outp
     DMA(44) = 1;
     REG(0x4000200cu) = 2;
     if (expected_fault)
-        return (status & 15u) == 5 && ((status >> 12) & 127u) == 2 &&
-               (metadata & 255u) == tag && ((metadata >> 8) & 7u) == 4 &&
+        return (status & 15u) == (RETRY >= 2 ? 3u : 5u) && ((status >> 12) & 127u) == 2 &&
+               (metadata & 255u) == tag && ((metadata >> 8) & 7u) == (RETRY >= 2 ? 3u : 4u) &&
                fault_address == output + 0x70000008u;
     return (status & 15u) == 0 && ((status >> 12) & 127u) == SAMPLES &&
            (metadata & 255u) == tag;
@@ -132,6 +136,11 @@ int main(void) {
         ok &= REG(OUTPUT + 4) == expected_output[1];
         for (unsigned i = 2; i < SAMPLES; ++i)
             ok &= REG(OUTPUT + 4 * i) == GUARD;
+#endif
+#if RETRY == 2
+        REG(0x3000101cu) = 0x04001ccfu;
+        REG(0x40002200u) = 0x101u;
+        while (REG(0x40002204u) & 1u) {}
 #endif
         ok &= offload(1, 4, HIDDEN, OUTPUT, 0);
         maintain(1);

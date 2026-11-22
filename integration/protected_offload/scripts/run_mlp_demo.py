@@ -85,7 +85,7 @@ def compile_firmware(folder, scalar, qos, retry):
         ))
 
 
-def run_case(executable, name, scalar=False, qos=8, contender=None, mutation=False, retry=False):
+def run_case(executable, name, scalar=False, qos=8, contender=None, mutation=False, retry=False, beats=4):
     folder = BUILD / name
     folder.mkdir(exist_ok=True)
     compile_firmware(folder, scalar, qos, retry)
@@ -99,8 +99,8 @@ def run_case(executable, name, scalar=False, qos=8, contender=None, mutation=Fal
                f"+FIRMWARE_HEX={folder / 'firmware.hex'}", f"+DATA_HEX={folder / 'data.hex'}",
                f"+CROSS_TRACE={trace}", "+MLP_DEMO"]
     if contender is not None:
-        command += ["+MLP_CONTEND", f"+MLP_QOS={contender}"]
-    if retry:
+        command += ["+MLP_CONTEND", f"+MLP_QOS={contender}", f"+MLP_BEATS={beats}"]
+    if retry == 1:
         command += ["+AXI_FAIL_WRITE_ADDR=10006024", "+AXI_FAIL_WRITE_COUNT=1"]
     run = subprocess.run(command, cwd=folder, capture_output=True, text=True, timeout=120)
     (folder / "simulation.log").write_text(run.stdout + run.stderr)
@@ -145,7 +145,7 @@ def compile_rtl(define=""):
     return folder / "Vtb_rv32_protected_shared"
 
 
-def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos):
+def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos, beats=4):
     records = list(events(trace))
     published = [event for event in records if event["kind"] == "COMPLETE_PUBLISH"]
     reads = [event for event in records if event["kind"] == "MEM_RSP" and event["write"] == "0"]
@@ -179,7 +179,7 @@ def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos):
                    and int(clean_start["cycle"]) <= int(e["cycle"]) <= int(maintenance[0]["cycle"])}
     require(0x10001080 in clean_lines, name + " final input cache line written back")
     peer_bursts = [e for e in records if e["kind"] == "AXI_AR" and e["master"] == "3"
-                   and e["addr"] == "1000f000" and e["len"] == "3"]
+                   and e["addr"] == "1000f000" and e["len"] == str(beats - 1)]
     matches = re.findall(r"MLP_AXI\|contenders=(\d+)\|overlap=(\d+)\|dma_wait=(\d+)\|contender_wait=(\d+)\|qos=(\d+)\|peer_qos=(\d+)", log)
     require(len(matches) == 1, name + " fabric instrumentation")
     contenders, overlap, dma_wait, contender_wait, seen_qos, seen_peer = map(int, matches[0])
@@ -224,6 +224,15 @@ def main():
         evidence.append(dict(mode=name, dma_qos=qos, peer_qos=peer,
                              trace=str(trace.relative_to(ROOT)),
                              trace_sha256=hashlib.sha256(trace.read_bytes()).hexdigest()))
+    trace, log = run_case(rtl, "single_beat_peer", contender=8, beats=1)
+    rows.append(check_case("single_beat_peer", trace, log, expected, False, 8, 8, beats=1))
+    evidence.append(dict(mode="single_beat_peer", trace=str(trace.relative_to(ROOT)),
+                         trace_sha256=hashlib.sha256(trace.read_bytes()).hexdigest()))
+    trace, log = run_case(compile_rtl("MLP_MUT_ZERO_PEER_QOS"), "zero_peer_qos", contender=15)
+    require(re.search(r"MLP_AXI\|contenders=[1-9]\d*\|overlap=[1-9]\d*.*\|qos=8\|peer_qos=0", log),
+            "QoS mutation exercised concurrent requests with corrupted priority")
+    evidence.append(dict(mode="zero_peer_qos", trace=str(trace.relative_to(ROOT)),
+                         trace_sha256=hashlib.sha256(trace.read_bytes()).hexdigest()))
     trace, _ = run_case(rtl, "fault_retry", contender=8, retry=True)
     records = list(events(trace))
     publications = [e for e in records if e["kind"] == "COMPLETE_PUBLISH" and e["tag"] == "98"]
@@ -240,6 +249,30 @@ def main():
     evidence.append(dict(mode="fault_retry", trace=str(trace.relative_to(ROOT)),
                          trace_sha256=hashlib.sha256(trace.read_bytes()).hexdigest(),
                          fault_event=publications[0]["eid"], retry_event=publications[1]["eid"]))
+    trace, _ = run_case(rtl, "mapping_repair", contender=8, retry=2)
+    records = list(events(trace))
+    publications = [e for e in records if e.get("kind") == "COMPLETE_PUBLISH" and e["tag"] == "98"]
+    require([(e["status"], e["fault_stage"], e["vectors_done"], e["fault_iova"])
+             for e in publications] == [("3", "3", "2", "80007000"),
+                                        ("0", "0", str(SAMPLES), "00000000")],
+            "page fault followed by successful repaired mapping")
+    writes = [e for e in records if e.get("kind") == "MEM_RSP"
+              and e["tag"] == "98" and e["committed"] == "1"]
+    addresses = [0x10006ff8 + 4 * i for i in range(SAMPLES)]
+    values = expected[OUTPUT]
+    require([(int(e["addr"], 16), int(e["wdata"], 16)) for e in writes] ==
+            list(zip(addresses[:2], values[:2])) + list(zip(addresses, values)),
+            "mapping-repair committed prefix and exact retry output")
+    evidence.append(dict(mode="mapping_repair", trace=str(trace.relative_to(ROOT)),
+                         trace_sha256=hashlib.sha256(trace.read_bytes()).hexdigest(),
+                         fault_event=publications[0]["eid"], retry_event=publications[1]["eid"]))
+    trace, _ = run_case(rtl, "missing_mapping_repair", contender=8, retry=3, mutation=True)
+    failures = [e for e in events(trace) if e.get("kind") == "COMPLETE_PUBLISH" and e["tag"] == "98"]
+    require([(e["status"], e["vectors_done"]) for e in failures] == [("3", "2"), ("3", "2")],
+            "omitted repair causes repeated precise translation fault")
+    evidence.append(dict(mode="missing_mapping_repair", trace=str(trace.relative_to(ROOT)),
+                         trace_sha256=hashlib.sha256(trace.read_bytes()).hexdigest(),
+                         repeated_fault_event=failures[1]["eid"]))
     trace, _ = run_case(compile_rtl("PROTECTED_MUT_FALSE_MAINTENANCE"), "skip_maintenance", mutation=True)
     mutated = list(events(trace))
     require(not any(e.get("kind") == "MAINT_START" for e in mutated) and
@@ -267,7 +300,7 @@ def main():
         writer.writeheader()
         writer.writerows(rows)
     print((BUILD / "summary.csv").read_text(), end="")
-    print("MLP demo: 5/5 modes, 4/4 maintenance/QoS crosses, 1/1 committed-prefix retry cross, 2/2 maintenance mutations")
+    print("MLP demo: 6/6 modes, 5/5 maintenance/QoS crosses, 2/2 retry crosses, 4/4 mutations")
 
 
 if __name__ == "__main__":

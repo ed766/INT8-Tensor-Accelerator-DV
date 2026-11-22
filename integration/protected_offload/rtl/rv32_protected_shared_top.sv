@@ -344,9 +344,12 @@ module rv32_protected_shared_top #(
    wire [3:0] direct_arqos;
    logic demo_contend;
    int demo_qos;
+   int demo_beats;
    initial begin
      demo_contend = $test$plusargs("MLP_CONTEND");
      if (!$value$plusargs("MLP_QOS=%d", demo_qos)) demo_qos = 15;
+     if (!$value$plusargs("MLP_BEATS=%d", demo_beats)) demo_beats = 4;
+     if (!(demo_beats inside {1, 4})) $fatal(1, "Unsupported MLP burst length");
    end
    // The workload makes no uncached loads during descriptor ownership.
    // One outstanding contender burst keeps its ID live through RLAST.
@@ -356,11 +359,15 @@ module rv32_protected_shared_top #(
    assign s_arvalid[3] = contender_selected ? 1'b1 : direct_arvalid;
    assign s_arid[3] = contender_selected ? '0 : direct_arid;
    assign s_araddr[3] = contender_selected ? 32'h1000_f000 : direct_araddr;
-   assign s_arlen[3] = contender_selected ? 8'd3 : direct_arlen;
+   assign s_arlen[3] = contender_selected ? 8'(demo_beats - 1) : direct_arlen;
    assign s_arsize[3] = contender_selected ? 3'd3 : direct_arsize;
    assign s_arprot[3] = contender_selected ? '0 : direct_arprot;
    assign s_arburst[3] = contender_selected ? 2'd1 : direct_arburst;
+`ifdef MLP_MUT_ZERO_PEER_QOS
+   assign s_arqos[3] = contender_selected ? 4'd0 : direct_arqos;
+`else
    assign s_arqos[3] = contender_selected ? demo_qos[3:0] : direct_arqos;
+`endif
    wire direct_rready;
    assign s_rready[3] = contender_outstanding ? 1'b1 : direct_rready;
    always_ff @(posedge clk or negedge rst_n) begin

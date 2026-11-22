@@ -49,3 +49,23 @@ The generated cache mutant skips cleaning only the line at `0x10001080`.
 The DMA reads zero at that address on the mutant and reads a nonzero input
 word in the passing control. Firmware then rejects the inference. The
 evidence manifest records both event IDs and the mutant trace checksum.
+
+## Mapping repair and burst coverage
+
+The mapping-repair run starts Layer 2 output at physical address
+`0x10006ff8`. The first two words commit before the unmapped output page at
+IOVA `0x80007000` faults. Firmware checks the committed prefix and guard
+values, installs the page-table entry, and invalidates the ASID before
+retrying. The omitted-repair control must fault twice at the same boundary.
+
+The contender runs include one-beat and four-beat reads at equal QoS.
+The checker counts observed burst requests and requires concurrent DMA and
+peer requests. A second negative control substitutes QoS zero for the
+requested QoS 15 on the peer request and checks the measured port value.
+
+## Independent AXI test
+
+With cocotb 2.0.1 and Verilator 5.036 or newer on PATH, run
+`make -C sim/cocotb`. The bench sends AXI-Lite address and data in both
+orders, stalls write responses and the output stream, and checks the
+result word and tag. It passed with the pinned Verilator 5.049 toolchain.
