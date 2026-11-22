@@ -101,6 +101,30 @@ static void scalar(unsigned bank, unsigned k, uint32_t input, uint32_t output,
     }
 }
 
+#ifdef MLIR_SCHEDULE
+#define STAGED 0x10009000u
+
+static unsigned dma_layer1(void) { return offload(0, 16, INPUT, HIDDEN, 0); }
+static unsigned dma_layer2_hidden(void) { return offload(1, 4, HIDDEN, OUTPUT, 0); }
+static unsigned dma_layer2_staged(void) { return offload(1, 4, STAGED, OUTPUT, 0); }
+static unsigned invalidate_hidden(void) { maintain(1); return 1; }
+static unsigned invalidate_output(void) { maintain(1); return 1; }
+static unsigned clean_staged(void) { maintain(0); return 1; }
+
+static unsigned stage_hidden(void) {
+    for (unsigned i = 0; i < SAMPLES; ++i)
+        REG(STAGED + 4 * i) = REG(HIDDEN + 4 * i);
+    return 1;
+}
+
+static unsigned observe_hidden(void) {
+    unsigned correct = 1;
+    for (unsigned i = 0; i < SAMPLES; ++i)
+        correct &= REG(HIDDEN + 4 * i) == expected_hidden[i];
+    return correct;
+}
+#endif
+
 int main(void) {
     const uint32_t start = cycle();
     unsigned ok = 1;
@@ -128,6 +152,10 @@ int main(void) {
         load_layer(1, 4, w2, b2, SHIFT2);
         CFG(16) = 0x0807u;
         maintain(0);
+#ifdef MLIR_SCHEDULE
+        REG(0x30001024u) = 0x040024cfu;
+#include MLIR_SCHEDULE
+#else
         ok &= offload(0, 16, INPUT, HIDDEN, 0);
 #if RETRY
         ok &= offload(1, 4, HIDDEN, OUTPUT, 1);
@@ -144,6 +172,7 @@ int main(void) {
 #endif
         ok &= offload(1, 4, HIDDEN, OUTPUT, 0);
         maintain(1);
+#endif
     }
     const uint32_t elapsed = cycle() - start;
     for (unsigned i = 0; i < SAMPLES; ++i) {

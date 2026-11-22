@@ -1,5 +1,8 @@
 # Cross-project INT8 demo
 
+The [MLIR backend comparison](mlir_backend.md) shows what changes when the
+compiler chains both DMA descriptors and when it must retain CPU staging.
+
 Download [trace_replay.html](trace_replay.html) and open it in a browser for the
 fault and retry replay. Regenerate it after running the demo with
 `python3 integration/protected_offload/scripts/export_mlp_replay.py`.

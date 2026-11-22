@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.20)
+project(Int8Mlir LANGUAGES C CXX)
+find_package(MLIR REQUIRED CONFIG)
+add_executable(int8-opt int8-opt.cpp)
+target_compile_features(int8-opt PRIVATE cxx_std_17)
+target_include_directories(int8-opt SYSTEM PRIVATE ${MLIR_INCLUDE_DIRS} ${LLVM_INCLUDE_DIRS})
+target_link_libraries(int8-opt PRIVATE MLIR LLVM)

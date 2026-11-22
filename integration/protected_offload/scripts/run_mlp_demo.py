@@ -64,12 +64,13 @@ def riscv_tool(name):
     raise SystemExit(f"Install {executable} or the Chiplet SoC RV32 toolchain")
 
 
-def compile_firmware(folder, scalar, qos, retry):
+def compile_firmware(folder, scalar, qos, retry, schedule=None):
     elf = folder / "firmware.elf"
     subprocess.run(
         [riscv_tool("gcc"), "-march=rv32im_zicsr", "-mabi=ilp32", "-O2",
          "-ffreestanding", "-nostdlib", "-fno-pic", "-msmall-data-limit=0", "-mno-relax",
          f"-DSCALAR={int(scalar)}", f"-DDMA_QOS={qos}", f"-DRETRY={int(retry)}", "-I", str(BUILD),
+         *([f'-DMLIR_SCHEDULE="{schedule}"'] if schedule else []),
          str(BOOT / "crt0.S"), str(FIRMWARE / "mlp_demo.c"), f"-T{BOOT / 'link.ld'}",
          "-Wl,--build-id=none", "-o", str(elf)], check=True,
     )
@@ -85,10 +86,10 @@ def compile_firmware(folder, scalar, qos, retry):
         ))
 
 
-def run_case(executable, name, scalar=False, qos=8, contender=None, mutation=False, retry=False, beats=4):
+def run_case(executable, name, scalar=False, qos=8, contender=None, mutation=False, retry=False, beats=4, schedule=None):
     folder = BUILD / name
     folder.mkdir(exist_ok=True)
-    compile_firmware(folder, scalar, qos, retry)
+    compile_firmware(folder, scalar, qos, retry, schedule)
     trace = folder / "crossover.trace"
     trace.unlink(missing_ok=True)
     digest = hashlib.sha256((folder / "firmware.elf").read_bytes())
@@ -145,7 +146,7 @@ def compile_rtl(define=""):
     return folder / "Vtb_rv32_protected_shared"
 
 
-def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos, beats=4):
+def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos, beats=4, staged=False):
     records = list(events(trace))
     published = [event for event in records if event["kind"] == "COMPLETE_PUBLISH"]
     reads = [event for event in records if event["kind"] == "MEM_RSP" and event["write"] == "0"]
@@ -168,11 +169,12 @@ def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos, beats
         require([by_address.get(base + 4 * i) for i in range(SAMPLES)] == words,
                 name + " PyTorch output compare")
     maintenance = [e for e in records if e["kind"] == "MAINT_DONE"]
-    require([(e["cmd"], e["error"]) for e in maintenance] == [("0", "0"), ("1", "0")],
+    require([(e["cmd"], e["error"]) for e in maintenance] == (
+                [("0", "0"), ("1", "0")] * (2 if staged else 1)),
             name + " clean/invalidate")
     require(int(maintenance[0]["cycle"]) < int(reads[0]["cycle"]) <
             int(published[0]["cycle"]) < int(published[1]["cycle"]) <
-            int(maintenance[1]["cycle"]), name + " ownership timeline")
+            int(maintenance[-1]["cycle"]), name + " ownership timeline")
     clean_start = next(e for e in records if e["kind"] == "MAINT_START")
     clean_lines = {int(e["addr"], 16): e["eid"] for e in records
                    if e["kind"] == "AXI_AW" and e["master"] == "0" and e["len"] == "3"
