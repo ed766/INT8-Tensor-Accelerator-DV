@@ -50,6 +50,23 @@ run `bash scripts/run_riscv_dv_spike.sh /path/to/riscv-dv /path/to/new-output`.
 The runner checks the upstream revision, generates and assembles the
 seed-2601 arithmetic program with PyFlow, and checks Spike completion.
 The observed RV32IMC run produced 7,337 commit records. This lane qualifies
-the independent generator and its program on the ISS. The generated
-program contains compressed instructions, so RTL differential replay
-requires a separate RV32IM-compatible target and bring-up harness.
+the independent generator and its program on the ISS. The generator smoke uses RV32IMC.
+
+## RISCV-DV differential replay on RV32IM RTL
+
+Use the pinned RISCV-DV checkout and the same Python and RISC-V tools as
+the generator smoke, plus Verilator. Run
+`python3 scripts/run_riscv_dv_rtl.py /path/to/riscv-dv`.
+PyFlow generates the initialization and arithmetic for seeds 2601, 2602,
+and 2603 with compressed instructions disabled. The runner assembles the
+arithmetic region into a shared image and compares every retirement from
+entry to the terminal instruction on Spike and the vendored RV32IM core.
+The comparison checks PC, instruction bits, destination register and
+write value. The RTL bench rejects traps, interrupts and memory accesses.
+
+The three runs matched 210, 1,130, and 396 retirements. Generated
+instructions exercised seven RV32M opcodes. A directed REMU suffix
+exercised the eighth. The harness replays the generated arithmetic region.
+The upstream boot code and trap handlers remain outside this comparison.
+Per-seed assembly, ELF hashes, and retirement logs are in
+`build/riscv_dv_rtl`.
