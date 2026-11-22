@@ -28,7 +28,7 @@ a C include from those calls so the measured firmware executes the generated
 schedule. The FX importer supplies model geometry, weights, biases, shifts, inputs,
 and PyTorch expected results. The backend supports batches of 4, 8, or 16
 and input widths of 4, 8, 16, 32, or 64, with four outputs per layer.
-It accepts a linear two-layer graph and the existing signed INT8
+It accepts a straight-line two- or three-layer graph and the existing signed INT8
 quantization contract.
 
 | Staged schedule | Chained schedule |
@@ -76,3 +76,39 @@ python3 compiler/mlir/compare.py build/int8-mlir/int8-opt /usr/lib/llvm-19/bin/F
 The command runs FileCheck on all three schedules, checks rejection of invalid
 input, and writes lowered MLIR, firmware includes, trace logs, and
 `comparison.csv` and `fx_comparison.csv` under `build/int8-mlir/rtl`.
+
+## Three layers and buffer lifetime
+
+**Chaining reduced simulated cycles by 9.4%** for a 16-sample
+32→4→4→4 FX model under AXI contention. The same four-beat QoS 15
+contender ran against QoS 8 DMA in both schedules. Firmware and trace
+checks matched the PyTorch bytes at both intermediate buffers and at
+the final output.
+
+| Schedule | RTL cycles | DMA payload | Descriptors | Cache operations |
+| --- | ---: | ---: | ---: | ---: |
+| Stage both intermediate activations | 15,609 | 832 B | 3 | 6 |
+| Chain both intermediate activations | 14,145 | 832 B | 3 | 2 |
+
+Every DMA call in this ABI waits for the IRQ and consumes the completion.
+The lowered calls distinguish the two producer buffers and the reusable
+staging slot. The verifier checks producer completion, invalidation before
+CPU reads, cleaning before DMA reads of staged data, and the consumer
+that releases the slot. The staged schedule reuses the slot after layer
+two completes. The chained schedule passes each producer buffer directly
+to its consumer. The third layer reloads the first parameter bank after
+the earlier completion.
+
+The regression inserts a copy of the middle buffer into the staging slot
+before layer two reads the first activation. `int8-opt --verify-schedule`
+rejects the modified IR with `premature reuse of live staging buffer`.
+A test-only firmware schedule executes the same overwrite and cleans the
+slot so the wrong bytes reach DMA. The first layer-two read at
+`0x10009000` returns the middle buffer's guard word `0xa53c79e1`.
+Firmware rejects the output.
+
+The existing reproduction command runs both schedules and the negative
+control. The MLIR CI job publishes `three_layer_comparison.csv`, the
+lowered schedules, and `premature_reuse.txt` with the rejection and first
+incorrect trace event. The lifetime model covers straight-line two- and
+three-layer graphs and the blocking firmware ABI.

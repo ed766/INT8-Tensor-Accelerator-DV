@@ -55,9 +55,8 @@ static void __attribute__((interrupt("machine"))) completion_handler(void) {
     completion_irq = 1;
 }
 
-static unsigned offload(unsigned bank, unsigned k, uint32_t input, uint32_t output,
-                        unsigned expected_fault) {
-    const unsigned tag = 0x61u + bank;
+static unsigned offload_tagged(unsigned bank, unsigned k, uint32_t input, uint32_t output,
+                               unsigned expected_fault, unsigned tag) {
     DMA(0) = input + 0x70000000u;
     DMA(4) = output + 0x70000000u;
     DMA(8) = (4u << 16) | k;
@@ -78,6 +77,11 @@ static unsigned offload(unsigned bank, unsigned k, uint32_t input, uint32_t outp
                fault_address == output + 0x70000008u;
     return (status & 15u) == 0 && ((status >> 12) & 127u) == SAMPLES &&
            (metadata & 255u) == tag;
+}
+
+static unsigned offload(unsigned bank, unsigned k, uint32_t input, uint32_t output,
+                        unsigned expected_fault) {
+    return offload_tagged(bank, k, input, output, expected_fault, 0x61u + bank);
 }
 
 static void scalar(unsigned bank, unsigned k, uint32_t input, uint32_t output,
@@ -126,6 +130,30 @@ static unsigned observe_hidden(void) {
         correct &= REG(HIDDEN + 4 * i) == expected_hidden[i];
     return correct;
 }
+#if defined(MLIR_LAYERS) && MLIR_LAYERS == 3
+#define MIDDLE 0x1000701cu
+
+static unsigned dma_layer2_to_middle(void) { return offload(1, 4, HIDDEN, MIDDLE, 0); }
+static unsigned dma_layer2_staged_to_middle(void) { return offload(1, 4, STAGED, MIDDLE, 0); }
+static unsigned invalidate_middle(void) { maintain(1); return 1; }
+
+static unsigned stage_middle(void) {
+    for (unsigned i = 0; i < SAMPLES; ++i)
+        REG(STAGED + 4 * i) = REG(MIDDLE + 4 * i);
+    return 1;
+}
+
+static unsigned run_layer3(uint32_t input) {
+    // Bank zero is free after layer one's IRQ completion was consumed.
+    load_layer(0, 4, w3, b3, SHIFT3);
+    for (unsigned o = 0; o < 4; ++o)
+        configure(0, 3, o, 0, 0);
+    return offload_tagged(0, 4, input, OUTPUT, 0, 0x63);
+}
+
+static unsigned dma_layer3_middle(void) { return run_layer3(MIDDLE); }
+static unsigned dma_layer3_staged(void) { return run_layer3(STAGED); }
+#endif
 #endif
 
 int main(void) {
@@ -135,6 +163,12 @@ int main(void) {
     REG(0x30001004u) = 0x040004cfu;
     REG(0x30001010u) = 0x040010cfu;
     REG(0x30001018u) = 0x040018cfu;
+#if defined(MLIR_LAYERS) && MLIR_LAYERS == 3
+    REG(0x3000101cu) = 0x04001ccfu;
+    for (unsigned i = 0; i < SAMPLES; ++i)
+        REG(MIDDLE + 4 * i) = GUARD;
+    REG(MIDDLE - 4) = REG(MIDDLE + SAMPLES * 4) = GUARD;
+#endif
     for (unsigned i = 0; i < SAMPLES * (INPUT_K / 4); ++i) REG(INPUT + 4 * i) = inputs[i];
     for (unsigned i = 0; i < SAMPLES; ++i) {
         REG(HIDDEN + 4 * i) = GUARD;
@@ -181,9 +215,15 @@ int main(void) {
     for (unsigned i = 0; i < SAMPLES; ++i) {
         ok &= REG(HIDDEN + i * 4) == expected_hidden[i];
         ok &= REG(OUTPUT + i * 4) == expected_output[i];
+#if defined(MLIR_LAYERS) && MLIR_LAYERS == 3
+        ok &= REG(MIDDLE + i * 4) == expected_middle[i];
+#endif
     }
     ok &= REG(HIDDEN - 4) == GUARD && REG(HIDDEN + SAMPLES * 4) == GUARD;
     ok &= REG(OUTPUT - 4) == GUARD && REG(OUTPUT + SAMPLES * 4) == GUARD;
+#if defined(MLIR_LAYERS) && MLIR_LAYERS == 3
+    ok &= REG(MIDDLE - 4) == GUARD && REG(MIDDLE + SAMPLES * 4) == GUARD;
+#endif
     REG(0x40001fe0u) = elapsed;
     REG(0x40001ff0u) = ok ? 0x600d5000u : 0xdead5000u;
     REG(0x40001ff4u) = 1;

@@ -17,7 +17,7 @@ HERE = Path(__file__).resolve().parent
 
 
 def export_fx(program, folder):
-    first, second = program.layers
+    first, second, *remaining = program.layers
     samples = len(program.inputs)
     if first.k != program.input_k or second.k != 4 or not first.relu or second.relu:
         raise ValueError("Expected Linear/ReLU followed by Linear")
@@ -34,6 +34,15 @@ def export_fx(program, folder):
   }}
 }}
 """
+    if remaining:
+        third, = remaining
+        if third.k != 4 or third.relu:
+            raise ValueError("Expected a four-input Linear third layer")
+        source = source.replace(
+            f"    return %output : {to_type}",
+            f"    %final = func.call @linear(%output) : ({to_type}) -> {to_type}\n"
+            f"    return %final : {to_type}",
+        )
     (folder / f"{program.name}.mlir").write_text(source)
 
     def pack(samples):
@@ -41,8 +50,9 @@ def export_fx(program, folder):
                     for lane, value in enumerate(sample[i:i + 4]))
                 for sample in samples for i in range(0, len(sample), 4)]
 
-    hidden, output = [pack([sample[layer] for sample in program.expected])
-                      for layer in range(2)]
+    expected = [pack([sample[layer] for sample in program.expected])
+                for layer in range(len(program.layers))]
+    hidden, output = expected[0], expected[-1]
     arrays = (
         ("uint32_t", "inputs", pack(program.inputs)),
         ("int8_t", "w1", [v for row in first.weights for v in row]),
@@ -50,12 +60,23 @@ def export_fx(program, folder):
         ("int32_t", "b1", first.biases), ("int32_t", "b2", second.biases),
         ("uint32_t", "expected_hidden", hidden), ("uint32_t", "expected_output", output),
     )
-    header = [f"#define SAMPLES {samples}", f"#define INPUT_K {first.k}",
+    if remaining:
+        arrays += (
+            ("int8_t", "w3", [v for row in third.weights for v in row]),
+            ("int32_t", "b3", third.biases),
+            ("uint32_t", "expected_middle", expected[1]),
+        )
+    header = [f"#define MLIR_LAYERS {len(program.layers)}", f"#define SAMPLES {samples}", f"#define INPUT_K {first.k}",
               f"#define SHIFT1 {first.shift}", f"#define SHIFT2 {second.shift}"]
+    if remaining:
+        header.append(f"#define SHIFT3 {third.shift}")
     for kind, name, values in arrays:
         header.append(f"static const {kind} {name}[] = {{{', '.join(map(str, values))}}};")
     (folder / "mlp_vectors.h").write_text("\n".join(header) + "\n")
-    return {demo.HIDDEN: hidden, demo.OUTPUT: output}
+    outputs = {demo.HIDDEN: hidden, demo.OUTPUT: output}
+    if remaining:
+        outputs[0x1000701c] = expected[1]
+    return outputs
 
 
 def check_fx_matrix(tool, filecheck, executable):
@@ -91,6 +112,71 @@ def check_fx_matrix(tool, filecheck, executable):
                                  dma_max_ar_wait=row["dma_max_ar_wait"],
                                  trace_sha256=hashlib.sha256(trace.read_bytes()).hexdigest()))
     return rows
+
+
+def check_three_layers(tool, filecheck, executable):
+    (demo.BUILD / "three_layer_comparison.csv").unlink(missing_ok=True)
+    name = "fx_three_layer"
+    expected = export_fx(compile_model(name, 2601, build_model(2601, 32, 3, 1),
+                                      32, samples=16), demo.BUILD)
+    rows = []
+    for staged, check in ((True, "THREE-STAGED"), (False, "THREE-CHAIN")):
+        mode = "three_staged" if staged else "three_chained"
+        header = demo.BUILD / f"{mode}.inc"
+        lowered = subprocess.check_output(
+            [tool, str(demo.BUILD / f"{name}.mlir"), f"--emit-header={header}",
+             *(["--force-staging"] if staged else [])], text=True)
+        subprocess.run([filecheck, str(HERE / "checks.txt"), f"--check-prefix={check}"],
+                       input=lowered, text=True, check=True)
+        lowering = demo.BUILD / f"{mode}.mlir"
+        lowering.write_text(lowered)
+        subprocess.run([tool, "--verify-schedule", str(lowering)], check=True)
+
+        trace, log = demo.run_case(executable, mode, contender=15, schedule=header)
+        row = demo.check_case(mode, trace, log, expected, False, 8, 15, staged=staged,
+                              input_k=32, layers=3)
+        records = list(demo.events(trace))
+        for tag, buffer in (("98", demo.HIDDEN), ("99", 0x1000701C)):
+            source = 0x10009000 if staged else buffer
+            reads = [e for e in records if e.get("kind") == "MEM_RSP" and
+                     e["write"] == "0" and e["tag"] == tag]
+            demo.require([(int(e["addr"], 16), int(e["rdata"], 16)) for e in reads] ==
+                         [(source + 4 * i, word) for i, word in enumerate(expected[buffer])],
+                         f"{mode} layer {tag} input bytes and buffer")
+        if staged:
+            # Deliberately overwrite the live first activation with the still
+            # unproduced middle buffer. The verifier must reject this schedule.
+            bad_ir = demo.BUILD / "premature_reuse.mlir"
+            call = "    call @dma_layer2_staged_to_middle()"
+            bad_ir.write_text(lowered.replace(call, "    call @stage_middle() : () -> ()\n" + call))
+            rejected = subprocess.run([tool, "--verify-schedule", str(bad_ir)],
+                                      text=True, capture_output=True)
+            demo.require(rejected.returncode != 0 and "premature reuse" in rejected.stderr,
+                         "schedule verifier must reject live staging reuse")
+            # Exercise the rejected schedule through a test-only firmware include.
+            bad_header = demo.BUILD / "premature_reuse.inc"
+            consumer = "if (ok) ok = dma_layer2_staged_to_middle();"
+            bad_header.write_text(header.read_text().replace(consumer,
+                "if (ok) ok = stage_middle();\nif (ok) ok = clean_staged();\n" + consumer))
+            bad_trace, _ = demo.run_case(executable, "premature_reuse", contender=15,
+                                         schedule=bad_header, mutation=True)
+            bad_reads = [e for e in demo.events(bad_trace) if e.get("kind") == "MEM_RSP"
+                         and e.get("write") == "0" and e["tag"] == "98"]
+            demo.require(bad_reads and bad_reads[0]["addr"] == "10009000"
+                         and int(bad_reads[0]["rdata"], 16) != expected[demo.HIDDEN][0],
+                         "premature reuse must corrupt the first staged DMA read")
+            (demo.BUILD / "premature_reuse.txt").write_text(
+                rejected.stderr + "\nFirst incorrect RTL read: " + str(bad_reads[0]) + "\n")
+        rows.append(dict(schedule=mode, cycles=row["cycles"], dma_bytes=row["dma_bytes"],
+                         maintenance_ops=sum(e.get("kind") == "MAINT_DONE" for e in records),
+                         overlap_cycles=row["overlap_cycles"],
+                         trace_sha256=hashlib.sha256(trace.read_bytes()).hexdigest()))
+    report = demo.BUILD / "three_layer_comparison.csv"
+    with report.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=rows[0])
+        writer.writeheader()
+        writer.writerows(rows)
+    print(report.read_text(), end="")
 
 
 def main():
@@ -179,6 +265,7 @@ def main():
         writer.writeheader()
         writer.writerows(rows)
     print(matrix.read_text(), end="")
+    check_three_layers(tool, filecheck, executable)
 
 
 if __name__ == "__main__":

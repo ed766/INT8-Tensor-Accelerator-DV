@@ -146,7 +146,7 @@ def compile_rtl(define=""):
     return folder / "Vtb_rv32_protected_shared"
 
 
-def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos, beats=4, staged=False, samples=SAMPLES, input_k=16):
+def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos, beats=4, staged=False, samples=SAMPLES, input_k=16, layers=2):
     records = list(events(trace))
     published = [event for event in records if event["kind"] == "COMPLETE_PUBLISH"]
     reads = [event for event in records if event["kind"] == "MEM_RSP" and event["write"] == "0"]
@@ -161,19 +161,20 @@ def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos, beats
         require(not published and not reads and not writes, name + " scalar DMA isolation")
         return dict(mode=name, cycles=cycles, dma_bytes=0, contenders=0, overlap_cycles=0,
                     dma_max_ar_wait=0, contender_max_ar_wait=0, cross_bins=0, descriptor_min=0, descriptor_max=0, clean_final_line_event="", peer_burst_event="", completion_samples=0, completion_p50="", completion_p99="", **waits)
+    tags = [str(97 + i) for i in range(layers)]
     require([(e["tag"], e["status"], e["vectors_done"]) for e in published] ==
-            [("97", "0", str(samples)), ("98", "0", str(samples))], name + " completions")
-    require(len(reads) == (input_k // 4 + 1) * samples and len(writes) == 2 * samples, name + " DMA accounting")
+            [(tag, "0", str(samples)) for tag in tags], name + " completions")
+    require(len(reads) == (input_k // 4 + layers - 1) * samples and len(writes) == layers * samples, name + " DMA accounting")
     require(all(event["error"] == "0" for event in reads), name + " read status")
     for base, words in expected.items():
         require([by_address.get(base + 4 * i) for i in range(samples)] == words,
                 name + " PyTorch output compare")
     maintenance = [e for e in records if e["kind"] == "MAINT_DONE"]
     require([(e["cmd"], e["error"]) for e in maintenance] == (
-                [("0", "0"), ("1", "0")] * (2 if staged else 1)),
+                [("0", "0"), ("1", "0")] * (layers if staged else 1)),
             name + " clean/invalidate")
     require(int(maintenance[0]["cycle"]) < int(reads[0]["cycle"]) <
-            int(published[0]["cycle"]) < int(published[1]["cycle"]) <
+            int(published[0]["cycle"]) < int(published[-1]["cycle"]) <
             int(maintenance[-1]["cycle"]), name + " ownership timeline")
     clean_lines = {int(e["addr"], 16): e["eid"] for e in records
                    if e["kind"] == "AXI_AW" and e["master"] == "0" and e["len"] == "3"
@@ -194,7 +195,7 @@ def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos, beats
     starts = {e["tag"]: int(e["cycle"]) for e in records if e["kind"] == "SUBMIT"}
     consumed = [e for e in records if e["kind"] == "COMPLETE"]
     interrupts = [e for e in records if e["kind"] == "RETIRE" and e.get("intr") == "1"]
-    require([e["tag"] for e in consumed] == ["97", "98"] and len(interrupts) == 2,
+    require([e["tag"] for e in consumed] == tags and len(interrupts) == layers,
             name + " interrupt-driven completion")
     durations = sorted(int(e["cycle"]) - starts[e["tag"]] for e in consumed)
     def percentile(fraction):
