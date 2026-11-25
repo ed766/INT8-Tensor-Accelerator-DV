@@ -96,6 +96,9 @@ jobs:
           export OSS_CAD_SUITE="$(realpath "$suite")"
           "$OSS_CAD_SUITE/bin/sby" --version
           make protected-offload-release-check
+      - name: Check the fan-out ADC model against the digital reference
+        if: matrix.lane == 'mlir'
+        run: python3 scripts/fanout_adc_sweep.py --no-plot
       - name: Test MLIR lowering, buffer planning, and batch tiling
         if: matrix.lane == 'mlir'
         run: |
@@ -123,3 +126,4 @@ jobs:
             int8_tensor_accelerator_dv/build/int8-mlir/rtl/*.mlir
             int8_tensor_accelerator_dv/build/int8-mlir/rtl/*/crossover.trace
             int8_tensor_accelerator_dv/build/int8-mlir/rtl/*/simulation.log
+            int8_tensor_accelerator_dv/build/fanout-adc/

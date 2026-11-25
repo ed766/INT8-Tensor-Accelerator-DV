@@ -8,9 +8,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
-from fx_graph_compiler import build_model, compile_model
+from fx_graph_compiler import build_model, compile_fanout, compile_model
 from torch import nn
-from torch.fx import symbolic_trace
 
 sys.path.insert(0, str(ROOT / "integration/protected_offload/scripts"))
 import run_mlp_demo as demo
@@ -258,32 +257,7 @@ def check_batch_tiling(tool, executable):
 
 
 def check_fanout(tool, executable):
-    class TwoHeads(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.layers = build_model(813, 32, 3, 1)
-
-        def forward(self, inputs):
-            trunk = self.layers[1](self.layers[0](inputs))
-            return self.layers[2](trunk), self.layers[3](trunk)
-
-    traced = symbolic_trace(TwoHeads().eval())
-    _, linear, relu, head1, head2, result = traced.graph.nodes
-    demo.require(relu.args == (linear,) and head1.args == head2.args == (relu,)
-                 and result.args == ((head1, head2),), "FX two-head dependencies")
-    trunk = [traced.get_submodule(str(node.target)) for node in (linear, relu)]
-    programs = [compile_model("fanout", 813, nn.Sequential(
-        *trunk, traced.get_submodule(str(head.target))), 32, samples=16)
-        for head in (head1, head2)]
-    first, second = programs
-    demo.require(first.inputs == second.inputs and first.layers[0] == second.layers[0],
-                 "shared FX trunk quantization")
-    # Both heads use the same quantized trunk and have independent references.
-    first.layers.append(second.layers[1])
-    for sample, other in zip(first.expected, second.expected):
-        demo.require(sample[0] == other[0], "shared trunk PyTorch result")
-        sample.append(other[1])
-    expected = export_fx(first, demo.BUILD, fanout=True)
+    expected = export_fx(compile_fanout(), demo.BUILD, fanout=True)
     model = demo.BUILD / "fanout.mlir"
     rows = []
     for mode, options, slot in (

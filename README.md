@@ -222,6 +222,7 @@ High-signal evidence:
 - [PyTorch/RTL comparison](reports/rtl_vs_pytorch_summary.csv)
 - [Two-layer RTL chain](reports/pytorch_mlp_rtl_summary.csv)
 - [PyTorch FX compiler and RTL execution](docs/fx_graph_compiler.md)
+- [MLIR backend and PyTorch ADC precision experiment](docs/mlir_backend.md#pytorch-experiment-on-adc-precision)
 - [Functional coverage](reports/functional_coverage.csv)
 - [Interaction crosses](reports/cross_coverage.csv)
 - [RTL mutation sensitivity](reports/mutation_summary.csv)

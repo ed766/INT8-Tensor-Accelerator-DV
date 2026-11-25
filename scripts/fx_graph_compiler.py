@@ -132,6 +132,43 @@ def compile_model(name: str, seed: int, model: nn.Module, input_k: int, *, sampl
     return GraphProgram(name, seed, input_k, nodes, layers, inputs, expected, float_mae)
 
 
+def compile_fanout() -> GraphProgram:
+    """Build the shared-trunk workload used by MLIR's RTL comparison."""
+    class TwoHeads(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.layers = build_model(813, 32, 3, 1)
+
+        def forward(self, inputs):
+            trunk = self.layers[1](self.layers[0](inputs))
+            return self.layers[2](trunk), self.layers[3](trunk)
+
+    traced = symbolic_trace(TwoHeads().eval())
+    _, linear, relu, head1, head2, result = traced.graph.nodes
+    if not (relu.args == (linear,) and head1.args == head2.args == (relu,)
+            and result.args == ((head1, head2),)):
+        raise ValueError("Unexpected FX two-head dependencies")
+    trunk = [traced.get_submodule(str(node.target)) for node in (linear, relu)]
+    first, second = [
+        compile_model("fanout", 813, nn.Sequential(
+            *trunk, traced.get_submodule(str(head.target))), 32, samples=16)
+        for head in (head1, head2)
+    ]
+    if first.inputs != second.inputs or first.layers[0] != second.layers[0]:
+        raise ValueError("Heads must share the same quantized trunk")
+    expected = []
+    for sample, other in zip(first.expected, second.expected, strict=True):
+        if sample[0] != other[0]:
+            raise ValueError("Heads disagree on the golden trunk output")
+        expected.append([*sample, other[1]])
+    return GraphProgram(
+        first.name, first.seed, first.input_k,
+        [f"{node.op}:{node.target}" for node in traced.graph.nodes],
+        [*first.layers, second.layers[1]], first.inputs, expected,
+        (first.float_mae + second.float_mae) / 2,
+    )
+
+
 def emit_case_function(lines: list[str], name: str, entries: dict[int, int], default: int = 0) -> None:
     lines.extend([f"function automatic integer signed {name}(input integer i);", "  begin", "    case (i)"])
     lines.extend(f"      {index}: {name} = {value};" for index, value in sorted(entries.items()))

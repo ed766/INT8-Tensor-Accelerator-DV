@@ -187,3 +187,56 @@ firmware include forces the write on RTL and checks that head two reads
 existing reproduction command and MLIR CI lane run both policies and
 the regression. See `fanout_comparison.csv`, the lowered IR, and
 `fanout_premature_reuse.txt` in the CI evidence.
+
+## PyTorch experiment on ADC precision
+
+The [ADC sweep](../scripts/fanout_adc_sweep.py) reuses the two-head RTL
+workload with the same signed inputs, weights, biases, and digital
+requantization shifts. It inserts an idealized signed ADC after each
+Linear's bias addition and before its digital shift and clamp. The heads
+consume the same converted trunk activation, so the experiment includes
+the propagation of trunk error.
+
+The sweep uses a fixed nominal half-range of 32,768 accumulator units
+for every layer, selected as a simple power-of-two range for the
+experiment. At width `b` the code step is `2 ** (16 - b)` accumulator
+units. The model rounds to nearest with ties away from zero, clamps to
+the signed code range, and decodes by multiplying by the step. The
+clipping rate counts rounded codes outside that range before clamping.
+The digital INT8 error is measured in output code units against the
+existing PyTorch golden bytes.
+
+![ADC precision sweep for the shared trunk and two output heads](images/fanout_adc_sweep.png)
+
+| ADC bits | Head 1 mean error | Head 2 mean error | Head 1 changed | Head 2 changed |
+| ---: | ---: | ---: | ---: | ---: |
+| 4 | 7.0625 | 8.2031 | 92.19% | 96.88% |
+| 6 | 2.0313 | 1.9844 | 89.06% | 89.06% |
+| 8 | 0.5000 | 0.6406 | 50.00% | 64.06% |
+| 10 | 0.3281 | 0.2344 | 32.81% | 23.44% |
+| 12 | 0.0625 | 0.0781 | 6.25% | 7.81% |
+| 16 | 0 | 0 | 0% | 0% |
+
+At 8 bits the trunk matches the golden bytes exactly, yet half the
+values in head 1 and nearly two-thirds in head 2 change. None of the
+1,152 ADC conversions clipped in this sweep. CPU and CUDA produced
+identical bytes and clipping masks on an RTX 5090 with PyTorch 2.7.1.
+
+From the repository root with PyTorch and matplotlib installed, run:
+
+```sh
+python scripts/fanout_adc_sweep.py
+```
+
+The command checks a hand-calculated clipping and rounding case and
+requires ADC bypass to reproduce every trunk and head byte. It writes
+`build/fanout-adc/sweep.csv`, `experiment.json`, and `sweep.png`. The JSON
+records the exact inputs, parameters, golden bytes, ADC settings,
+PyTorch version, and a SHA-256 of the serialized integer fixture.
+MLIR CI runs the same check with `--no-plot`. On a CUDA-capable PyTorch
+installation, add `--cuda` to require exact CPU/GPU agreement on the
+outputs and clipping masks at every bit width.
+
+This is a behavioral approximation for one synthetic workload. It
+models fixed-range quantization and clipping. Device dynamics, noise,
+hardware timing, and energy are outside the experiment's scope.
