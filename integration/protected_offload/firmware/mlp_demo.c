@@ -171,6 +171,38 @@ static unsigned run_layer3(uint32_t input) {
 
 static unsigned dma_layer3_middle(void) { return run_layer3(MIDDLE); }
 static unsigned dma_layer3_staged(void) { return run_layer3(STAGED); }
+#ifdef MLIR_HEAD2_SLOT
+#define HEAD2 (MLIR_HEAD2_SLOT == 1 ? MIDDLE : OUTPUT)
+#define PUBLISHED1 0x1000a000u
+#define PUBLISHED2 0x1000a040u
+
+static unsigned dma_head1(void) { return dma_layer2_to_middle(); }
+static unsigned dma_head2(void) {
+    load_layer(0, 4, w3, b3, SHIFT3);
+    for (unsigned o = 0; o < 4; ++o)
+        configure(0, 3, o, 0, 0);
+    return offload_tagged(0, 4, HIDDEN, HEAD2, 0, 0x63);
+}
+
+static unsigned publish_head(uint32_t source, uint32_t destination) {
+    maintain(1);
+    for (unsigned i = 0; i < SAMPLES; ++i)
+        REG(destination + 4 * i) = REG(source + 4 * i);
+    // Preserve the copied outputs across the next full-cache invalidation.
+    maintain(0);
+    return 1;
+}
+static unsigned publish_head1(void) { return publish_head(MIDDLE, PUBLISHED1); }
+static unsigned publish_head2(void) { return publish_head(HEAD2, PUBLISHED2); }
+
+#ifdef MLIR_TEST_REUSE_TRUNK
+static unsigned reuse_trunk(void) {
+    REG(HIDDEN) = GUARD;
+    maintain(0);
+    return 1;
+}
+#endif
+#endif
 #endif
 #endif
 
@@ -190,9 +222,16 @@ int main(void) {
     for (unsigned i = 0; i < SAMPLES * (INPUT_K / 4); ++i) REG(INPUT + 4 * i) = inputs[i];
     for (unsigned i = 0; i < SAMPLES; ++i) {
         REG(HIDDEN + 4 * i) = GUARD;
+#ifndef MLIR_HEAD2_SLOT
         REG(OUTPUT + 4 * i) = GUARD;
+#else
+        if (MLIR_HEAD2_SLOT == 2) REG(OUTPUT + 4 * i) = GUARD;
+#endif
     }
     REG(HIDDEN - 4) = REG(HIDDEN + SAMPLES * 4) = GUARD;
+#ifdef MLIR_HEAD2_SLOT
+    if (MLIR_HEAD2_SLOT == 2)
+#endif
     REG(OUTPUT - 4) = REG(OUTPUT + SAMPLES * 4) = GUARD;
 
     if (SCALAR) {
@@ -232,12 +271,20 @@ int main(void) {
     const uint32_t elapsed = cycle() - start;
     for (unsigned i = 0; i < SAMPLES; ++i) {
         ok &= REG(HIDDEN + i * 4) == expected_hidden[i];
+#ifdef MLIR_HEAD2_SLOT
+        ok &= REG(PUBLISHED1 + i * 4) == expected_middle[i];
+        ok &= REG(PUBLISHED2 + i * 4) == expected_output[i];
+#else
         ok &= REG(OUTPUT + i * 4) == expected_output[i];
 #if defined(MLIR_LAYERS) && MLIR_LAYERS == 3
         ok &= REG(MIDDLE + i * 4) == expected_middle[i];
 #endif
+#endif
     }
     ok &= REG(HIDDEN - 4) == GUARD && REG(HIDDEN + SAMPLES * 4) == GUARD;
+#ifdef MLIR_HEAD2_SLOT
+    if (MLIR_HEAD2_SLOT == 2)
+#endif
     ok &= REG(OUTPUT - 4) == GUARD && REG(OUTPUT + SAMPLES * 4) == GUARD;
 #if defined(MLIR_LAYERS) && MLIR_LAYERS == 3
     ok &= REG(MIDDLE - 4) == GUARD && REG(MIDDLE + SAMPLES * 4) == GUARD;

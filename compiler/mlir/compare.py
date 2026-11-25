@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 from fx_graph_compiler import build_model, compile_model
 from torch import nn
+from torch.fx import symbolic_trace
 
 sys.path.insert(0, str(ROOT / "integration/protected_offload/scripts"))
 import run_mlp_demo as demo
@@ -17,7 +18,7 @@ import run_mlp_demo as demo
 HERE = Path(__file__).resolve().parent
 
 
-def export_fx(program, folder):
+def export_fx(program, folder, *, fanout=False):
     first, second, *remaining = program.layers
     samples = len(program.inputs)
     if first.k != program.input_k or second.k != 4 or not first.relu or second.relu:
@@ -39,11 +40,16 @@ def export_fx(program, folder):
         third, = remaining
         if third.k != 4 or third.relu:
             raise ValueError("Expected a four-input Linear third layer")
+        third_input = "%hidden" if fanout else "%output"
+        return_values = f"%output, %final : {to_type}, {to_type}" if fanout else f"%final : {to_type}"
         source = source.replace(
             f"    return %output : {to_type}",
-            f"    %final = func.call @linear(%output) : ({to_type}) -> {to_type}\n"
-            f"    return %final : {to_type}",
+            f"    %final = func.call @linear({third_input}) : ({to_type}) -> {to_type}\n"
+            f"    return {return_values}",
         )
+        if fanout:
+            source = source.replace(f"-> {to_type}\n      attributes",
+                                    f"-> ({to_type}, {to_type})\n      attributes")
     (folder / f"{program.name}.mlir").write_text(source)
 
     def pack(samples):
@@ -251,6 +257,96 @@ def check_batch_tiling(tool, executable):
     print(report.read_text(), end="")
 
 
+def check_fanout(tool, executable):
+    class TwoHeads(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.layers = build_model(813, 32, 3, 1)
+
+        def forward(self, inputs):
+            trunk = self.layers[1](self.layers[0](inputs))
+            return self.layers[2](trunk), self.layers[3](trunk)
+
+    traced = symbolic_trace(TwoHeads().eval())
+    _, linear, relu, head1, head2, result = traced.graph.nodes
+    demo.require(relu.args == (linear,) and head1.args == head2.args == (relu,)
+                 and result.args == ((head1, head2),), "FX two-head dependencies")
+    trunk = [traced.get_submodule(str(node.target)) for node in (linear, relu)]
+    programs = [compile_model("fanout", 813, nn.Sequential(
+        *trunk, traced.get_submodule(str(head.target))), 32, samples=16)
+        for head in (head1, head2)]
+    first, second = programs
+    demo.require(first.inputs == second.inputs and first.layers[0] == second.layers[0],
+                 "shared FX trunk quantization")
+    # Both heads use the same quantized trunk and have independent references.
+    first.layers.append(second.layers[1])
+    for sample, other in zip(first.expected, second.expected):
+        demo.require(sample[0] == other[0], "shared trunk PyTorch result")
+        sample.append(other[1])
+    expected = export_fx(first, demo.BUILD, fanout=True)
+    model = demo.BUILD / "fanout.mlir"
+    rows = []
+    for mode, options, slot in (
+        ("fanout_dedicated", ["--dedicated-scratch"], 2),
+        ("fanout_reuse", [], 1),
+    ):
+        header = demo.BUILD / f"{mode}.inc"
+        lowered = subprocess.check_output(
+            [tool, str(model), *options, f"--emit-header={header}"], text=True)
+        plan = demo.BUILD / f"{mode}.mlir"
+        plan.write_text(lowered)
+        subprocess.run([tool, "--verify-schedule", str(plan)], check=True)
+        demo.require(f"int8.head2_slot = {slot} : i32" in lowered, "arena allocation")
+        trace, log = demo.run_case(executable, mode, contender=15, schedule=header)
+        middle = 0x1000701c
+        outputs = [(demo.HIDDEN, expected[demo.HIDDEN]), (middle, expected[middle]),
+                   (middle if slot == 1 else demo.OUTPUT, expected[demo.OUTPUT])]
+        row = demo.check_case(mode, trace, log, expected, False, 8, 15,
+                              input_k=32, layers=3, fanout_outputs=outputs)
+        reads = [e for e in demo.events(trace) if e.get("kind") == "MEM_RSP"
+                 and e["tag"] in ("98", "99") and e["write"] == "0"]
+        demo.require([(int(e["addr"], 16), int(e["rdata"], 16)) for e in reads] ==
+                     [(demo.HIDDEN + 4 * i, word)
+                      for _ in range(2) for i, word in enumerate(expected[demo.HIDDEN])],
+                     "both heads read the unchanged trunk")
+        rows.append(dict(schedule=mode, arena_slots=slot + 1, scratch_payload_bytes=64 * (slot + 1),
+                         cycles=row["cycles"], dma_bytes=row["dma_bytes"],
+                         maintenance_ops=5, output_copy_bytes=128,
+                         trace_sha256=hashlib.sha256(trace.read_bytes()).hexdigest()))
+        if slot == 1:
+            bad_plan = demo.BUILD / "fanout_premature_reuse.mlir"
+            bad_plan.write_text(lowered.replace("  func.func @run_schedule",
+                "  func.func private @reuse_trunk()\n  func.func @run_schedule").replace(
+                "    call @dma_head2()", "    call @reuse_trunk() : () -> ()\n    call @dma_head2()"))
+            result = subprocess.run([tool, "--verify-schedule", str(bad_plan)],
+                                    capture_output=True, text=True)
+            demo.require(result.returncode != 0 and "second head still needs" in result.stderr,
+                         "fanout premature reuse rejected")
+            bad_header = demo.BUILD / "fanout_premature_reuse.inc"
+            bad_header.write_text("#define MLIR_TEST_REUSE_TRUNK\n" + header.read_text().replace(
+                "if (ok) ok = dma_head2();", "if (ok) ok = reuse_trunk();\nif (ok) ok = dma_head2();"))
+            bad_trace, _ = demo.run_case(executable, "fanout_premature_reuse", contender=15,
+                                         schedule=bad_header, mutation=True)
+            records = list(demo.events(bad_trace))
+            first_bad_read = next(e for e in records if e.get("kind") == "MEM_RSP"
+                                  and e["tag"] == "99" and e["write"] == "0")
+            first_done = next(e for e in records if e.get("kind") == "COMPLETE" and e["tag"] == "98")
+            demo.require(first_bad_read["addr"] == "1000401c"
+                         and first_bad_read["rdata"] == "a53c79e1"
+                         and int(first_bad_read["rdata"], 16) != expected[demo.HIDDEN][0]
+                         and int(first_done["cycle"]) < int(first_bad_read["cycle"]),
+                         "second head observes overwritten trunk after first head completes")
+            (demo.BUILD / "fanout_premature_reuse.txt").write_text(
+                result.stderr + "\nFirst wrong read: " + str(first_bad_read) + "\n")
+    report = demo.BUILD / "fanout_comparison.csv"
+    with report.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=rows[0])
+        writer.writeheader()
+        writer.writerows(rows)
+    print(report.read_text(), end="")
+
+
+
 def main():
     tool, filecheck = (str(Path(arg).resolve()) for arg in sys.argv[1:])
     demo.BUILD = ROOT / "build/int8-mlir/rtl"
@@ -339,6 +435,7 @@ def main():
     print(matrix.read_text(), end="")
     check_three_layers(tool, filecheck, executable)
     check_batch_tiling(tool, executable)
+    check_fanout(tool, executable)
 
 
 if __name__ == "__main__":

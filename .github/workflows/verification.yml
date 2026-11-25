@@ -96,7 +96,7 @@ jobs:
           export OSS_CAD_SUITE="$(realpath "$suite")"
           "$OSS_CAD_SUITE/bin/sby" --version
           make protected-offload-release-check
-      - name: Test MLIR lowering, lifetimes, and batch tiling
+      - name: Test MLIR lowering, buffer planning, and batch tiling
         if: matrix.lane == 'mlir'
         run: |
           sudo apt-get install -y cmake llvm-19-dev llvm-19-tools libmlir-19-dev mlir-19-tools
@@ -119,7 +119,7 @@ jobs:
             int8_tensor_accelerator_dv/build/protected_offload/mlp_demo/evidence.json
             int8_tensor_accelerator_dv/build/protected_offload/dma_stall_faults/**/*.log
             int8_tensor_accelerator_dv/build/int8-mlir/rtl/*.csv
-            int8_tensor_accelerator_dv/build/int8-mlir/rtl/premature_reuse.txt
+            int8_tensor_accelerator_dv/build/int8-mlir/rtl/*premature_reuse.txt
             int8_tensor_accelerator_dv/build/int8-mlir/rtl/*.mlir
             int8_tensor_accelerator_dv/build/int8-mlir/rtl/*/crossover.trace
             int8_tensor_accelerator_dv/build/int8-mlir/rtl/*/simulation.log

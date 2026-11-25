@@ -146,7 +146,7 @@ def compile_rtl(define=""):
     return folder / "Vtb_rv32_protected_shared"
 
 
-def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos, beats=4, staged=False, samples=SAMPLES, input_k=16, layers=2, tile=None):
+def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos, beats=4, staged=False, samples=SAMPLES, input_k=16, layers=2, tile=None, fanout_outputs=None):
     records = list(events(trace))
     published = [event for event in records if event["kind"] == "COMPLETE_PUBLISH"]
     reads = [event for event in records if event["kind"] == "MEM_RSP" and event["write"] == "0"]
@@ -167,13 +167,20 @@ def check_case(name, trace, log, expected, scalar, dma_qos, contender_qos, beats
             [(tag, "0", str(tile)) for tag in tags], name + " completions")
     require(len(reads) == (input_k // 4 + layers - 1) * samples and len(writes) == layers * samples, name + " DMA accounting")
     require(all(event["error"] == "0" for event in reads), name + " read status")
-    for base, words in expected.items():
-        require([by_address.get(base + 4 * i) for i in range(samples)] == words,
-                name + " PyTorch output compare")
+    if fanout_outputs is None:
+        for base, words in expected.items():
+            require([by_address.get(base + 4 * i) for i in range(samples)] == words,
+                    name + " PyTorch output compare")
+    else:
+        require([(int(e["addr"], 16), int(e["wdata"], 16)) for e in writes] ==
+                [(base + 4 * i, word) for base, words in fanout_outputs
+                 for i, word in enumerate(words)], name + " ordered PyTorch output compare")
     maintenance = [e for e in records if e["kind"] == "MAINT_DONE"]
-    require([(e["cmd"], e["error"]) for e in maintenance] == (
-                [("0", "0"), ("1", "0")] * (layers if staged else 1)),
-            name + " clean/invalidate")
+    commands = ["0", "1"] * (layers if staged else 1)
+    if fanout_outputs is not None:
+        commands = ["0", "1", "0", "1", "0"]
+    require([(e["cmd"], e["error"]) for e in maintenance] ==
+            [(command, "0") for command in commands], name + " clean/invalidate")
     require(int(maintenance[0]["cycle"]) < int(reads[0]["cycle"]) <
             int(published[0]["cycle"]) < int(published[-1]["cycle"]) <
             int(maintenance[-1]["cycle"]), name + " ownership timeline")

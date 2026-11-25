@@ -10,6 +10,51 @@
 using namespace mlir;
 
 namespace {
+// Lifetimes use completion of blocking runtime calls as their boundaries.
+// A consumer and producer in the same call cannot alias.
+struct BufferLifetime {
+  unsigned firstWrite;
+  unsigned lastRead;
+};
+
+unsigned allocateSlot(BufferLifetime value, SmallVectorImpl<unsigned> &lastReads,
+                      bool dedicated) {
+  if (!dedicated) {
+    for (unsigned slot = 0; slot < lastReads.size(); ++slot) {
+      if (lastReads[slot] < value.firstWrite) {
+        lastReads[slot] = value.lastRead;
+        return slot;
+      }
+    }
+  }
+  lastReads.push_back(value.lastRead);
+  return lastReads.size() - 1;
+}
+
+// Both head results are synchronously exported to host-owned storage.
+LogicalResult verifyFanout(func::FuncOp schedule) {
+  if (schedule->getAttrOfType<IntegerAttr>("int8.layers").getInt() != 3)
+    return schedule.emitError("fan-out requires a trunk and two heads");
+  auto slot = schedule->getAttrOfType<IntegerAttr>("int8.head2_slot");
+  if (!slot || (slot.getInt() != 1 && slot.getInt() != 2))
+    return schedule.emitError("head output must use a non-trunk arena slot");
+  StringRef order[] = {"dma_layer1", "dma_head1", "publish_head1",
+                       "dma_head2", "publish_head2"};
+  unsigned next = 0;
+  for (Operation &op : schedule.front().without_terminator()) {
+    auto call = dyn_cast<func::CallOp>(op);
+    if (call && call.getCallee() == "reuse_trunk")
+      return op.emitError("premature reuse: the second head still needs the trunk");
+    if (!call || call.getNumOperands() || call.getNumResults() ||
+        next == 5 || call.getCallee() != order[next])
+      return op.emitError("invalid fan-out ownership transition");
+    ++next;
+  }
+  if (next != 5)
+    return schedule.emitError("missing fan-out completion or publish");
+  return success();
+}
+
 // Each DMA ABI call returns after firmware consumes its completion. A
 // staged value stays live from the CPU copy through that consuming call.
 LogicalResult verifySchedule(func::FuncOp schedule) {
@@ -25,6 +70,8 @@ LogicalResult verifySchedule(func::FuncOp schedule) {
         batch.getInt() % tile.getInt() != 0)
       return schedule.emitError("invalid batch tile");
   }
+  if (schedule->hasAttr("int8.head2_slot"))
+    return verifyFanout(schedule);
   unsigned completed = 0;
   unsigned staged = 0;
   bool cpuVisible = false, clean = false, terminal = false;
@@ -82,8 +129,10 @@ LogicalResult verifySchedule(func::FuncOp schedule) {
 }
 
 struct LowerModel : PassWrapper<LowerModel, OperationPass<ModuleOp>> {
-  explicit LowerModel(bool enableChaining) : enableChaining(enableChaining) {}
+  LowerModel(bool enableChaining, bool dedicated)
+      : enableChaining(enableChaining), dedicated(dedicated) {}
   bool enableChaining;
+  bool dedicated;
 
   void runOnOperation() override {
     ModuleOp module = getOperation();
@@ -109,7 +158,9 @@ struct LowerModel : PassWrapper<LowerModel, OperationPass<ModuleOp>> {
       return reject("unsupported model shape");
     auto output = RankedTensorType::get({samples, 4}, builder.getI8Type());
     auto quantization = model->getAttrOfType<StringAttr>("int8.quantization");
-    if (model.getFunctionType() != builder.getFunctionType({input}, {output}) ||
+    bool fanout = signature.getNumResults() == 2;
+    SmallVector<Type> results(fanout ? 2 : 1, output);
+    if (model.getFunctionType() != builder.getFunctionType({input}, results) ||
         !quantization || quantization.getValue() != "signed-i8-nearest-away-saturate-v1")
       return reject("unsupported model shape or quantization contract");
 
@@ -119,7 +170,7 @@ struct LowerModel : PassWrapper<LowerModel, OperationPass<ModuleOp>> {
     if (!first || first.getCallee() != "linear_relu" ||
         first.getNumOperands() != 1 || first.getOperand(0) != block.getArgument(0) ||
         first.getNumResults() != 1 || first.getResult(0).getType() != output ||
-        !last || last.getNumOperands() != 1)
+        !last || last.getNumOperands() != results.size())
       return reject("expected Linear/ReLU followed by Linear");
     auto hidden = first.getResult(0);
     func::CallOp second;
@@ -135,7 +186,7 @@ struct LowerModel : PassWrapper<LowerModel, OperationPass<ModuleOp>> {
           call.getNumResults() == 1 && call.getResult(0).getType() == output)
         second = call;
       else if (call.getCallee() == "linear" && second && !third &&
-               call.getOperand(0) == second.getResult(0) &&
+               call.getOperand(0) == (fanout ? hidden : second.getResult(0)) &&
                call.getNumResults() == 1 && call.getResult(0).getType() == output)
         third = call;
       else if (call.getCallee() == "observe_hidden" && call.getOperand(0) == hidden && !cpuConsumer && !second &&
@@ -144,7 +195,10 @@ struct LowerModel : PassWrapper<LowerModel, OperationPass<ModuleOp>> {
       else
         return reject("unsupported consumer or schedule");
     }
-    if (!second || last.getOperand(0) != (third ? third : second).getResult(0))
+    if (!second || (fanout
+        ? (!third || cpuConsumer || last.getOperand(0) != second.getResult(0) ||
+           last.getOperand(1) != third.getResult(0))
+        : last.getOperand(0) != (third ? third : second).getResult(0)))
       return reject("expected model to return the final layer");
 
     bool chain = enableChaining && hidden.hasOneUse();
@@ -160,26 +214,40 @@ struct LowerModel : PassWrapper<LowerModel, OperationPass<ModuleOp>> {
       builder.create<func::CallOp>(location, name, TypeRange{}, ValueRange{});
     };
     emit("dma_layer1");
-    if (chain) {
-      emit(third ? "dma_layer2_to_middle" : "dma_layer2_hidden");
+    if (fanout) {
+      // Trunk is live across both heads. Head one's slot becomes free only
+      // after publish_head1 copies it out of the arena.
+      SmallVector<unsigned> lastReads;
+      allocateSlot({0, 3}, lastReads, dedicated); // trunk, read by both DMA heads
+      allocateSlot({1, 2}, lastReads, dedicated); // first head, read by publish_head1
+      unsigned head2 = allocateSlot({3, 4}, lastReads, dedicated);
+      schedule->setAttr("int8.head2_slot", builder.getI32IntegerAttr(head2));
+      emit("dma_head1");
+      emit("publish_head1");
+      emit("dma_head2");
+      emit("publish_head2");
     } else {
-      emit("invalidate_hidden");
-      if (cpuConsumer)
-        emit("observe_hidden");
-      emit("stage_hidden");
-      emit("clean_staged");
-      emit(third ? "dma_layer2_staged_to_middle" : "dma_layer2_staged");
-    }
-    if (third) {
-      bool chainMiddle = enableChaining && second.getResult(0).hasOneUse();
-      if (!chainMiddle) {
-        emit("invalidate_middle");
-        emit("stage_middle");
+      if (chain) {
+        emit(third ? "dma_layer2_to_middle" : "dma_layer2_hidden");
+      } else {
+        emit("invalidate_hidden");
+        if (cpuConsumer)
+          emit("observe_hidden");
+        emit("stage_hidden");
         emit("clean_staged");
+        emit(third ? "dma_layer2_staged_to_middle" : "dma_layer2_staged");
       }
-      emit(chainMiddle ? "dma_layer3_middle" : "dma_layer3_staged");
+      if (third) {
+        bool chainMiddle = enableChaining && second.getResult(0).hasOneUse();
+        if (!chainMiddle) {
+          emit("invalidate_middle");
+          emit("stage_middle");
+          emit("clean_staged");
+        }
+        emit(chainMiddle ? "dma_layer3_middle" : "dma_layer3_staged");
+      }
+      emit("invalidate_output");
     }
-    emit("invalidate_output");
     builder.create<func::ReturnOp>(location);
     if (failed(verifySchedule(schedule)))
       return signalPassFailure();
@@ -237,6 +305,7 @@ int main(int argc, char **argv) {
   llvm::cl::opt<std::string> tile("batch-tiling", llvm::cl::init("full"),
                                  llvm::cl::desc("full, four, or auto"));
   llvm::cl::opt<bool> contended("axi-contention");
+  llvm::cl::opt<bool> dedicated("dedicated-scratch");
   llvm::cl::ParseCommandLineOptions(argc, argv);
   DialectRegistry registry;
   registry.insert<func::FuncDialect>();
@@ -251,7 +320,7 @@ int main(int argc, char **argv) {
     return 1;
   }
   PassManager manager(&context);
-  manager.addPass(std::make_unique<LowerModel>(!staged));
+  manager.addPass(std::make_unique<LowerModel>(!staged, dedicated));
   manager.addPass(std::make_unique<TileBatch>(tile.getValue(), contended));
   if (failed(manager.run(*module)))
     return 1;
@@ -267,7 +336,10 @@ int main(int argc, char **argv) {
     auto schedule = module->lookupSymbol<func::FuncOp>("run_schedule");
     file << "#ifdef MLIR_SCHEDULE_CONFIG\n#define MLIR_TILE_VECTORS "
          << schedule->getAttrOfType<IntegerAttr>("int8.tile_vectors").getInt()
-         << "\n#else\n";
+         << "\n";
+    if (auto slot = schedule->getAttrOfType<IntegerAttr>("int8.head2_slot"))
+      file << "#define MLIR_HEAD2_SLOT " << slot.getInt() << "\n";
+    file << "#else\n";
     bool three = schedule->getAttrOfType<IntegerAttr>("int8.layers").getInt() == 3;
     for (auto call : schedule.getOps<func::CallOp>())
       file << (three ? "if (ok) ok = " : "ok &= ") << call.getCallee() << "();\n";

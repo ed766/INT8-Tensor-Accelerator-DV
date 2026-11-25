@@ -154,3 +154,36 @@ shape and a contention flag, and it has limited validation across
 traffic patterns. The existing reproduction command writes
 `batch_tiling.csv` with 18 RTL runs, including the measured automatic
 policy, requester overlap, maximum read-address wait and trace hashes.
+
+## Two-head graph and scratch planning
+
+**The compiler reduced reserved scratch payload from 192 to 128 bytes**
+for a 16-sample graph with one shared trunk and two output heads. Both
+heads consume the same quantized activation. Both policies matched
+PyTorch on the trunk and both heads under the same AXI contention.
+
+| Policy | Scratch slots | Scratch payload | RTL cycles | DMA payload | Cache operations | CPU output copies |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Dedicated slots | 3 | 192 B | 15,503 | 832 B | 5 | 128 B |
+| Lifetime-based reuse | 2 | 128 B | 15,275 | 832 B | 5 | 128 B |
+
+Scratch payload counts the 64-byte vector arrays assigned to the arena.
+The input, cache-line padding, guard words, and two host-owned output
+arrays are outside that count. The benchmark uses blocking DMA and
+publishes each head's result to host-owned memory before the next head runs.
+
+The FX trace identifies both consumers of the trunk. The lowering assigns
+scratch slots using the producer write and final consumer read of each
+activation. The trunk stays live through head two. Head one's scratch
+slot becomes available after its output has been copied and cleaned.
+The verifier checks the supported fan-out schedule's DMA and publish
+ordering. `--dedicated-scratch` reserves a separate slot for each activation
+for comparison.
+
+The premature-reuse regression inserts a write to the trunk after head
+one completes. The compiler rejects the modified schedule. A test-only
+firmware include forces the write on RTL and checks that head two reads
+`0xa53c79e1` at `0x1000401c` before firmware rejects the result. The
+existing reproduction command and MLIR CI lane run both policies and
+the regression. See `fanout_comparison.csv`, the lowered IR, and
+`fanout_premature_reuse.txt` in the CI evidence.
