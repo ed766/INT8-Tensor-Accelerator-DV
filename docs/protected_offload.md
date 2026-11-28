@@ -1,5 +1,10 @@
 # Protected Accelerator Offload
 
+The [UVM reset recovery regression](protected_offload_reset_uvm.md) tests
+four shared-reset windows and three local offload-reset windows. The local
+cases check late AXI response drain and three-descriptor recovery while
+the hart and memory system keep running.
+
 ## Operand and IRQ Timing Matrix
 
 `make compute-m-permutation-check` adds finite, separately reported closure:

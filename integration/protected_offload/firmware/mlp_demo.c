@@ -64,14 +64,19 @@ static void __attribute__((interrupt("machine"))) completion_handler(void) {
     completion_irq = 1;
 }
 
-static unsigned submit_tile(unsigned bank, unsigned k, uint32_t input, uint32_t output,
-                               unsigned expected_fault, unsigned tag) {
+static void program_tile(unsigned bank, unsigned k, uint32_t input, uint32_t output,
+                         unsigned tag) {
     DMA(0) = input + 0x70000000u;
     DMA(4) = output + 0x70000000u;
     DMA(8) = (4u << 16) | k;
     DMA(12) = (MLIR_TILE_VECTORS << 7) | k;
     DMA(16) = ((7u + bank) << 17) | (bank << 16) | (1u << 8) | tag;
     DMA(20) = DMA_QOS;
+}
+
+static unsigned submit_tile(unsigned bank, unsigned k, uint32_t input, uint32_t output,
+                            unsigned expected_fault, unsigned tag) {
+    program_tile(bank, k, input, output, tag);
     completion_irq = 0;
     __asm__ volatile("csrs mie, %0" :: "r"(0x800u) : "memory");
     DMA(24) = 1;
@@ -206,6 +211,107 @@ static unsigned reuse_trunk(void) {
 #endif
 #endif
 
+#ifdef LOCAL_RESET_JOBS
+#define RESET_STATUS 0x40001fdcu
+#define JOB_STRIDE 0x100u
+
+static unsigned job_sample(unsigned job, unsigned sample, unsigned replacement) {
+    unsigned index = replacement ? SAMPLES - 1 - sample : sample;
+    return (index + 3 * job) % SAMPLES;
+}
+
+static void reset_job_inputs(unsigned job, unsigned replacement) {
+    for (unsigned i = 0; i < SAMPLES; ++i) {
+        unsigned source = job_sample(job, i, replacement);
+        for (unsigned j = 0; j < INPUT_K / 4; ++j)
+            REG(INPUT + job * JOB_STRIDE + i * INPUT_K + 4 * j) =
+                inputs[source * (INPUT_K / 4) + j];
+    }
+}
+
+int main(void) {
+    unsigned ok = 1;
+    REG(0x30000800u) = 0x0c000401u;
+    REG(0x30001004u) = 0x040004cfu;
+    REG(0x30001010u) = 0x040010cfu;
+    load_layer(0, INPUT_K, w1, b1, SHIFT1);
+    CFG(16) = 7;
+    REG(0x40002008u) = 2;
+    __asm__ volatile("csrw mscratch, %0" :: "r"(GUARD) : "memory");
+    for (unsigned job = 0; job < LOCAL_RESET_JOBS; ++job) {
+        uint32_t output = HIDDEN + job * JOB_STRIDE;
+        reset_job_inputs(job, 0);
+        for (unsigned i = 0; i < SAMPLES; ++i) REG(output + 4 * i) = GUARD;
+        REG(output - 4) = REG(output + SAMPLES * 4) = GUARD;
+    }
+    for (unsigned job = 0; job < LOCAL_RESET_JOBS; ++job) {
+        program_tile(0, INPUT_K, INPUT + job * JOB_STRIDE, HIDDEN + job * JOB_STRIDE, 0x61 + job);
+        DMA(24) = 1;
+    }
+
+    // The hart stays live. Only the offload domain and its queues reset.
+    while (!(REG(RESET_STATUS) & 2u)) {}
+    uint32_t hart_cookie;
+    __asm__ volatile("csrr %0, mscratch" : "=r"(hart_cookie));
+    ok &= hart_cookie == GUARD && (DMA(28) & 0x3feu) == 0;
+    // The live IRQ controller retains its sticky status until the host clears it.
+    REG(0x4000200cu) = 2;
+    ok &= REG(0x40002000u) == 0;
+    load_layer(0, INPUT_K, w1, b1, SHIFT1);
+    CFG(16) = 7;
+    __asm__ volatile("csrw mtvec, %0; csrsi mstatus, 8" ::
+                     "r"((uintptr_t)completion_handler) : "memory");
+    for (unsigned job = 0; job < LOCAL_RESET_JOBS; ++job) {
+        uint32_t output = HIDDEN + job * JOB_STRIDE;
+        reset_job_inputs(job, 1);
+        ok &= submit_tile(0, INPUT_K, INPUT + job * JOB_STRIDE, output, 0, 0x61 + job);
+        for (unsigned i = 0; i < SAMPLES; ++i)
+            ok &= REG(output + 4 * i) == expected_hidden[job_sample(job, i, 1)];
+        ok &= REG(output - 4) == GUARD && REG(output + SAMPLES * 4) == GUARD;
+    }
+    REG(0x40001ff0u) = ok ? 0x600d5000u : 0xdead5000u;
+    REG(0x40001ff4u) = 1;
+    return 0;
+}
+#elif defined(RESET_RECOVERY)
+int main(void) {
+    // A boot cookie in retained shared SRAM distinguishes recovery from cold boot.
+    const uint32_t cookie = 0x10005000u;
+    const unsigned reboot = REG(cookie) == GUARD;
+    unsigned ok = (DMA(28) & 0x3feu) == 0 && REG(0x40002000u) == 0;
+    REG(0x30000800u) = 0x0c000401u;
+    REG(0x30001004u) = 0x040004cfu;
+    REG(0x30001010u) = 0x040010cfu;
+    load_layer(0, INPUT_K, w1, b1, SHIFT1);
+    CFG(16) = 7;
+    for (unsigned i = 0; i < SAMPLES; ++i) {
+        unsigned source = reboot ? SAMPLES - 1 - i : i;
+        for (unsigned j = 0; j < INPUT_K / 4; ++j)
+            REG(INPUT + i * INPUT_K + 4 * j) = inputs[source * (INPUT_K / 4) + j];
+        if (!reboot)
+            REG(HIDDEN + 4 * i) = GUARD;
+    }
+    REG(0x40002008u) = 2;
+    if (!reboot) {
+        REG(HIDDEN - 4) = REG(HIDDEN + SAMPLES * 4) = GUARD;
+        REG(cookie) = GUARD;
+        program_tile(0, INPUT_K, INPUT, HIDDEN, 0x61);
+        // Leave CPU interrupts masked so the IRQ window stays open for the sequence.
+        DMA(24) = 1;
+        for (;;) {}
+    }
+    __asm__ volatile("csrw mtvec, %0; csrsi mstatus, 8" ::
+                     "r"((uintptr_t)completion_handler) : "memory");
+    ok &= submit_tile(0, INPUT_K, INPUT, HIDDEN, 0, 0x61);
+    for (unsigned i = 0; i < SAMPLES; ++i)
+        ok &= REG(HIDDEN + 4 * i) == expected_hidden[SAMPLES - 1 - i];
+    ok &= REG(HIDDEN - 4) == GUARD && REG(HIDDEN + SAMPLES * 4) == GUARD;
+    ok &= (DMA(28) & 0x3feu) == 0 && REG(0x40002000u) == 0;
+    REG(0x40001ff0u) = ok ? 0x600d5000u : 0xdead5000u;
+    REG(0x40001ff4u) = 1;
+    return 0;
+}
+#else
 int main(void) {
     const uint32_t start = cycle();
     unsigned ok = 1;
@@ -294,3 +400,4 @@ int main(void) {
     REG(0x40001ff4u) = 1;
     return 0;
 }
+#endif

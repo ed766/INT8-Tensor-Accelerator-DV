@@ -4,7 +4,7 @@
 // The DUT interface is unchanged; normalized events are correlated off-line
 // by run, reset epoch, software tag, ASID, and transport direction.
 module protected_crossover_observer (
-  input logic clk, input logic rst_n,
+  input logic clk, input logic rst_n, input logic offload_reset_active,
   input logic [3:0] fabric_arvalid, input logic [3:0] fabric_arready,
   input logic [3:0] fabric_awvalid, input logic [3:0] fabric_awready,
   input logic [3:0][31:0] fabric_araddr,
@@ -284,6 +284,7 @@ module protected_crossover_observer (
   // Capture pre-reset asynchronous state before DUT reset logic clears the
   // completion FIFO. The next sampled RESET_ASSERT event can then prove the
   // reset really interrupted an unread completion.
+  logic previous_offload_reset = 0;
   always @(negedge rst_n) begin
     if (cycle > 0) begin
       reset_completion_pending_q = completion_valid;
@@ -301,6 +302,7 @@ module protected_crossover_observer (
 
   always @(posedge clk) begin
     cycle <= cycle + 1;
+    previous_offload_reset <= rst_n && offload_reset_active;
       if (!rst_n) begin
       if (!was_reset) begin
         epoch = epoch + 1;
@@ -330,6 +332,15 @@ module protected_crossover_observer (
       was_reset <= 1'b1;
     end else begin
       if (was_reset) emit("RESET_RELEASE", "");
+      if (offload_reset_active && !previous_offload_reset) begin
+        emit("OFFLOAD_RESET_ASSERT", $sformatf("mem_pending=%0b|ptw_pending=%0b|xlate_pending=%0b",
+             mem_pending, ptw_pending, xlate_pending));
+        mem_pending = 0;
+        xlate_pending = 0;
+        ptw_pending = 0;
+      end
+      if (!offload_reset_active && previous_offload_reset)
+        emit("OFFLOAD_RESET_RELEASE", "");
       was_reset <= 1'b0;
       if (commit_valid) emit("RETIRE", $sformatf("pc=%08x|next_pc=%08x|insn=%08x|retire_order=%0d|trap=%0d|intr=%0d|rs1_addr=%0d|rs1_data=%08x|rs2_addr=%0d|rs2_data=%08x|rd_addr=%0d|rd_data=%08x|mem_addr=%08x|mem_rmask=%x|mem_wmask=%x|mem_rdata=%08x|mem_wdata=%08x|mstatus=%08x|mie=%08x|mtvec=%08x|mscratch=%08x|mepc=%08x|mcause=%08x|mtval=%08x|irq_level=%0d|irq_timer_level=%0d|m_ext=%0d", commit_pc, commit_next_pc, commit_instr, commit_order, commit_trap, commit_intr, commit_rs1_addr, commit_rs1_data, commit_rs2_addr, commit_rs2_data, commit_rd_addr, commit_rd_data, commit_mem_addr, commit_mem_rmask, commit_mem_wmask, commit_mem_rdata, commit_mem_wdata, commit_mstatus, commit_mie, commit_mtvec, commit_mscratch, commit_mepc, commit_mcause, commit_mtval, irq_ext_level, irq_timer_level, cpu_enable_m));
       if (muldiv_busy != prev_muldiv_busy)

@@ -64,12 +64,14 @@ def riscv_tool(name):
     raise SystemExit(f"Install {executable} or the Chiplet SoC RV32 toolchain")
 
 
-def compile_firmware(folder, scalar, qos, retry, schedule=None):
+def compile_firmware(folder, scalar, qos, retry, schedule=None, *, reset_recovery=False, local_reset_jobs=0):
     elf = folder / "firmware.elf"
     subprocess.run(
         [riscv_tool("gcc"), "-march=rv32im_zicsr", "-mabi=ilp32", "-O2",
          "-ffreestanding", "-nostdlib", "-fno-pic", "-msmall-data-limit=0", "-mno-relax",
          f"-DSCALAR={int(scalar)}", f"-DDMA_QOS={qos}", f"-DRETRY={int(retry)}", "-I", str(BUILD),
+         *(["-DRESET_RECOVERY"] if reset_recovery else []),
+         *([f"-DLOCAL_RESET_JOBS={local_reset_jobs}"] if local_reset_jobs else []),
          *([f'-DMLIR_SCHEDULE="{schedule}"'] if schedule else []),
          str(BOOT / "crt0.S"), str(FIRMWARE / "mlp_demo.c"), f"-T{BOOT / 'link.ld'}",
          "-Wl,--build-id=none", "-o", str(elf)], check=True,

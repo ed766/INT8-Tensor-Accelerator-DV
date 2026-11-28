@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 module tb_rv32_protected_shared #(parameter bit USE_CACHE=0,parameter bit CPU_ENABLE_M=0,parameter bit CPU_ENABLE_TRAPS=1,parameter bit ENABLE_CHIPLET=0,parameter int COMPLETION_POP_WAIT_CYCLES=0);
  logic clk=0,rst_n=0,firmware_done,commit_valid,irq,chip_active_debug,chip_link_debug;logic[2:0]chip_state_debug,chip_submit_debug,chip_comp_debug;logic[8:0]chip_send_debug,chip_recv_debug;logic[31:0]firmware_result,commit_pc,cycles,benchmark_cycles;logic recovery_snapshot_valid=0;logic[31:0]recovery_snapshot_addr=0;logic[63:0]recovery_snapshot_data=0;logic recovery_snapshot_sent=0;logic reset_trigger_pending=0;string reset_phase="none";always #5 clk=~clk;
- rv32_protected_shared_top #(.USE_CACHE(USE_CACHE),.CPU_ENABLE_M(CPU_ENABLE_M),.CPU_ENABLE_TRAPS(CPU_ENABLE_TRAPS),.ENABLE_CHIPLET(ENABLE_CHIPLET),.COMPLETION_POP_WAIT_CYCLES(COMPLETION_POP_WAIT_CYCLES)) dut(.*);integer commits=0;
+ rv32_protected_shared_top #(.USE_CACHE(USE_CACHE),.CPU_ENABLE_M(CPU_ENABLE_M),.CPU_ENABLE_TRAPS(CPU_ENABLE_TRAPS),.ENABLE_CHIPLET(ENABLE_CHIPLET),.COMPLETION_POP_WAIT_CYCLES(COMPLETION_POP_WAIT_CYCLES)) dut(.offload_reset_req(1'b0),.*);integer commits=0;
  integer prolonged_wait_cycles=0;
  logic prior_reset_release=0;
  always @(posedge clk) begin

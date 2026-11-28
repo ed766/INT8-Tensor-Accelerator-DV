@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="630" viewBox="0 0 960 630" role="img" aria-labelledby="title desc">
+  <title id="title">From PyTorch to INT8 hardware</title>
+  <desc id="desc">PyTorch FX captures two heads sharing the same trunk. MLIR lowers the graph to an RV32 DMA schedule. Head one publishes its output before head two reuses scratch slot one. This saves 64 bytes of scratch payload. Both plans match PyTorch under AXI contention.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+      <path d="M0 0L7 3.5L0 7Z" fill="#869bb5"/>
+    </marker>
+    <style>
+      text{font-family:system-ui,sans-serif;fill:#eef4ff}
+      .muted{fill:#b5c5db;font-size:16px}
+      .label{fill:#85def0;font-size:15px;font-weight:650;letter-spacing:1px}
+      .heading{font-size:24px;font-weight:650}
+      .code{font-family:monospace;font-size:17px;fill:#dbeaff}
+      .panel{fill:#18263b;stroke:#344863}
+      .flow{fill:none;stroke:#869bb5;stroke-width:2;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="960" height="630" rx="24" fill="#101a2b"/>
+  <text x="38" y="58" font-size="36" font-weight="700">From PyTorch to INT8 hardware</text>
+  <text x="40" y="88" class="muted">One shared trunk, two output heads, and a scratch slot used twice</text>
+
+  <rect x="38" y="112" width="270" height="188" rx="16" class="panel"/>
+  <text x="58" y="143" class="label">PYTORCH FX</text>
+  <text x="173" y="183" text-anchor="middle" class="heading">Shared trunk</text>
+  <text x="173" y="208" text-anchor="middle" class="muted">Linear → ReLU · 16 × 4</text>
+  <path d="M173 219V230L110 249" class="flow"/>
+  <path d="M173 230L236 249" class="flow"/>
+  <text x="110" y="278" text-anchor="middle" font-size="19">Head 1</text>
+  <text x="236" y="278" text-anchor="middle" font-size="19">Head 2</text>
+
+  <path d="M314 205H337" class="flow"/>
+  <path d="M621 205H644" class="flow"/>
+  <rect x="345" y="112" width="270" height="188" rx="16" class="panel"/>
+  <text x="365" y="143" class="label">MLIR</text>
+  <text x="365" y="183" class="heading">Plan the schedule</text>
+  <text x="365" y="214" class="code">linear(%hidden)</text>
+  <text x="365" y="240" class="code">linear(%hidden)</text>
+  <text x="365" y="275" class="muted">Keep %hidden live for both reads</text>
+
+  <rect x="652" y="112" width="270" height="188" rx="16" class="panel"/>
+  <text x="672" y="143" class="label">RV32 FIRMWARE + RTL</text>
+  <text x="672" y="183" class="heading">Execute on DMA</text>
+  <text x="672" y="214" class="muted">Run trunk and head descriptors</text>
+  <text x="672" y="240" class="muted">Publish both results to the host</text>
+  <text x="672" y="275" class="muted">Check bytes against PyTorch</text>
+
+  <text x="40" y="342" class="heading">When can MLIR reuse a slot?</text>
+  <g text-anchor="middle" class="muted">
+    <text x="238" y="380">Run trunk</text><text x="390" y="380">Run head 1</text>
+    <text x="542" y="380">Publish head 1</text><text x="694" y="380">Run head 2</text>
+    <text x="846" y="380">Publish head 2</text>
+  </g>
+  <text x="40" y="420" class="muted">Slot 0 · 64 B</text>
+  <text x="40" y="472" class="muted">Slot 1 · 64 B</text>
+  <rect x="166" y="393" width="754" height="40" rx="8" fill="#23324a"/>
+  <rect x="166" y="445" width="754" height="40" rx="8" fill="#23324a"/>
+  <rect x="166" y="393" width="600" height="40" rx="8" fill="#245a70"/>
+  <rect x="318" y="445" width="296" height="40" rx="8" fill="#49436d"/>
+  <rect x="622" y="445" width="298" height="40" rx="8" fill="#49436d"/>
+  <g text-anchor="middle" font-size="16">
+    <text x="466" y="419">Trunk stays live through head 2’s read</text>
+    <text x="466" y="471">Head 1 output</text><text x="771" y="471">Head 2 output</text>
+  </g>
+  <text x="40" y="542" font-size="25" font-weight="650">192 B → 128 B</text>
+  <text x="350" y="542" font-size="25" font-weight="650">15,503 → 15,275 cycles</text>
+  <text x="40" y="568" class="muted">Reserved scratch payload</text>
+  <text x="350" y="568" class="muted">End-to-end RTL simulation</text>
+  <text x="40" y="604" class="muted">Dedicated → reuse · 16 samples · Same AXI contention · Both plans matched PyTorch byte-for-byte</text>
+</svg>

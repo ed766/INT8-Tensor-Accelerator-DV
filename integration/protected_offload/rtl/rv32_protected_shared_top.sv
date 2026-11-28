@@ -12,7 +12,8 @@ module rv32_protected_shared_top #(
   parameter int ROM_WORDS=4096,parameter int DATA_MEM_WORDS=4096,
   parameter int COMPLETION_POP_WAIT_CYCLES=0,
   parameter bit USE_CACHE=0,parameter bit CPU_ENABLE_M=0,parameter bit CPU_ENABLE_TRAPS=1,parameter bit ENABLE_CHIPLET=0
-)(input logic clk,input logic rst_n,input logic recovery_snapshot_valid,input logic[31:0]recovery_snapshot_addr,input logic[63:0]recovery_snapshot_data,output logic firmware_done,output logic[31:0]firmware_result,
+)(input logic clk,input logic rst_n,input logic offload_reset_req,
+   input logic recovery_snapshot_valid,input logic[31:0]recovery_snapshot_addr,input logic[63:0]recovery_snapshot_data,output logic firmware_done,output logic[31:0]firmware_result,
    output logic commit_valid,output logic[31:0]commit_pc,output logic irq,output logic[31:0]cycles,
    output logic[31:0]benchmark_cycles,output logic chip_active_debug,output logic[2:0]chip_state_debug,
    output logic[2:0]chip_submit_debug,output logic[2:0]chip_comp_debug,output logic[8:0]chip_send_debug,
@@ -29,6 +30,31 @@ module rv32_protected_shared_top #(
   logic cfg_valid,cfg_ready,cfg_bank;logic[2:0]cfg_kind;logic[1:0]cfg_output;logic[5:0]cfg_index;logic[31:0]cfg_data;logic[1:0][7:0]bank_generation;
   logic svc_irq,busy;logic[2:0]submit_occupancy,completion_occupancy;logic[31:0]perf_tlb_hits,perf_tlb_misses,perf_walk_reads,perf_faults;
   logic completion_published;logic[7:0]completion_publish_tag,completion_publish_asid;logic[3:0]completion_publish_status;logic[2:0]completion_publish_fault_stage;logic[6:0]completion_publish_vectors_done;
+  logic offload_reset_active, offload_reset_done, offload_rst_n, offload_reset_status_sel;
+  logic dma_adapter_idle, ptw_adapter_idle, dma_adapter_rsp_valid, ptw_adapter_rsp_valid;
+
+  // The AXI adapters keep ownership of accepted requests through the local reset.
+  // Their responses are consumed at the adapter boundary while the service is reset.
+  assign offload_rst_n = rst_n && !offload_reset_active;
+  assign offload_reset_status_sel = psel && paddr == 32'h4000_1fdc;
+  assign mem_req_ready = dma_adapter_idle && !offload_reset_active;
+  assign ptw_req_ready = ptw_adapter_idle && !offload_reset_active;
+  assign mem_rsp_valid = dma_adapter_rsp_valid && !offload_reset_active;
+  assign ptw_rsp_valid = ptw_adapter_rsp_valid && !offload_reset_active;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      offload_reset_active <= 0;
+      offload_reset_done <= 0;
+    end else if (offload_reset_active) begin
+      if (dma_adapter_idle && ptw_adapter_idle) begin
+        offload_reset_active <= 0;
+        offload_reset_done <= 1;
+      end
+    end else if (offload_reset_req) begin
+      offload_reset_active <= 1;
+      offload_reset_done <= 0;
+    end
+  end
   logic[4:0] owned_valid;logic[4:0][31:0] owned_start,owned_end,owned_input_start,owned_input_end,owned_output_start,owned_output_end;
   logic ptw_req_valid,ptw_req_ready,ptw_rsp_valid,ptw_rsp_ready,ptw_rsp_error,translation_idle,tlb_inv_valid,tlb_inv_all,block_submissions;logic[7:0]tlb_inv_asid;logic[31:0]ptw_req_addr,ptw_rsp_data;
   logic mem_req_valid,mem_req_ready,mem_req_write,mem_rsp_valid,mem_rsp_ready,mem_rsp_error;logic[31:0]mem_req_addr,mem_req_wdata,mem_rsp_rdata;logic[3:0]mem_req_wstrb,mem_req_qos;
@@ -78,7 +104,7 @@ module rv32_protected_shared_top #(
 
   assign dma_sel=psel&&paddr>=32'h4000_0000&&paddr<32'h4000_1000;
   assign mail_sel=psel&&paddr>=32'h4000_1fe0&&paddr<32'h4000_2000;
-  assign cfg_sel=psel&&paddr>=32'h4000_1000&&paddr<32'h4000_2000&&!mail_sel;
+  assign cfg_sel=psel&&paddr>=32'h4000_1000&&paddr<32'h4000_2000&&!mail_sel&&!offload_reset_status_sel;
   assign irq_sel=psel&&paddr>=32'h4000_2000&&paddr<32'h4000_2100;
   assign maint_sel=psel&&paddr>=32'h4000_2100&&paddr<32'h4000_2200;
   assign tlb_sel=psel&&paddr>=32'h4000_2200&&paddr<32'h4000_2300;
@@ -142,7 +168,7 @@ module rv32_protected_shared_top #(
   always @(posedge clk) begin:ownership_mapping_lifetime
     logic [31:0] first_page,last_address,page_address;
     int page_slot;
-    if(!rst_n)begin
+    if(!offload_rst_n)begin
       ownership_xlate_pending=1'b0;
       ownership_xlate_write=1'b0;
       ownership_xlate_iova='0;
@@ -240,7 +266,13 @@ module rv32_protected_shared_top #(
   end
   always_comb begin
     prdata='0;pready=psel&&penable;pslverr=psel&&penable;
-    if(dma_sel)begin prdata=dma_rdata;pready=dma_ready;pslverr=dma_error;end
+    if (offload_reset_status_sel) begin
+      prdata = {30'b0, offload_reset_done, offload_reset_active};
+      pslverr = penable && pwrite;
+    end else if (offload_reset_active && (dma_sel || cfg_sel)) begin
+      pready = 0;
+      pslverr = 0;
+    end else if(dma_sel)begin prdata=dma_rdata;pready=dma_ready;pslverr=dma_error;end
     else if(cfg_sel)begin prdata=cfg_rdata;pready=cfg_ready_apb;pslverr=cfg_error;end
     else if(irq_sel)begin prdata=irq_rdata;pready=irq_ready;pslverr=irq_error;end
     else if(maint_sel)begin prdata=maint_rdata;pready=maint_ready_apb;pslverr=maint_error_apb;end
@@ -259,8 +291,8 @@ module rv32_protected_shared_top #(
   rv32_rom_feeder #(.ROM_WORDS(ROM_WORDS),.DEFAULT_HEX("build/protected_offload/shared_firmware/firmware.hex")) rom(.clk,.rst_n,.instr_ready,.instr_valid,.instr,.commit_valid,.commit_next_pc,.halted(1'b0));
   // The service resolves whether the selected configuration bank is still
   // referenced by queued/active work.  Surface that as a normal APB error.
-  protected_accel_apb_config cfg(.clk,.rst_n,.paddr(paddr[11:0]),.psel(cfg_sel),.penable,.pwrite,.pwdata,.prdata(cfg_rdata),.pready(cfg_ready_apb),.pslverr(cfg_error),.cfg_valid,.cfg_ready,.cfg_reject(svc.cfg_reject),.generation_referenced(svc.bank_referenced),.cfg_kind,.cfg_bank,.cfg_output,.cfg_index,.cfg_data,.bank_generation);
-  protected_offload_service svc(.clk,.rst_n,.apb_addr(paddr[11:0]),.apb_sel(dma_sel),.apb_enable(dma_apb_enable),.apb_write(pwrite),.apb_wdata(pwdata),.apb_rdata(dma_rdata),.apb_ready(dma_ready),.apb_error(dma_error),.root_pt_addr(32'h3000_0000),.tlb_inv_valid,.block_submissions,.tlb_inv_all,.tlb_inv_asid,.translation_idle,.ptw_req_valid,.ptw_req_ready,.ptw_req_addr,.ptw_rsp_valid,.ptw_rsp_ready,.ptw_rsp_data,.ptw_rsp_error,.mem_req_valid,.mem_req_ready,.mem_req_write,.mem_req_addr,.mem_req_wdata,.mem_req_wstrb,.mem_req_qos,.mem_rsp_valid,.mem_rsp_ready,.mem_rsp_rdata,.mem_rsp_error,.cfg_valid,.cfg_ready,.cfg_kind,.cfg_bank,.cfg_output,.cfg_index,.cfg_data,.bank_generation,.irq(svc_irq),.busy,.submit_occupancy,.completion_occupancy,.completion_published,.completion_publish_tag,.completion_publish_asid,.completion_publish_status,.completion_publish_fault_stage,.completion_publish_vectors_done,.perf_tlb_hits,.perf_tlb_misses,.perf_walk_reads,.perf_faults,.last_translation_tlb_hit(),.accel_command_error(),.perf_accel_accepted(),.perf_accel_completed(),.perf_accel_input_chunks(),.perf_accel_output_stalls(),.perf_accel_bank_swaps(),.owned_valid,.owned_start,.owned_end,.owned_input_start,.owned_input_end,.owned_output_start,.owned_output_end);
+  protected_accel_apb_config cfg(.clk,.rst_n(offload_rst_n),.paddr(paddr[11:0]),.psel(cfg_sel),.penable,.pwrite,.pwdata,.prdata(cfg_rdata),.pready(cfg_ready_apb),.pslverr(cfg_error),.cfg_valid,.cfg_ready,.cfg_reject(svc.cfg_reject),.generation_referenced(svc.bank_referenced),.cfg_kind,.cfg_bank,.cfg_output,.cfg_index,.cfg_data,.bank_generation);
+  protected_offload_service svc(.clk,.rst_n(offload_rst_n),.apb_addr(paddr[11:0]),.apb_sel(dma_sel),.apb_enable(dma_apb_enable),.apb_write(pwrite),.apb_wdata(pwdata),.apb_rdata(dma_rdata),.apb_ready(dma_ready),.apb_error(dma_error),.root_pt_addr(32'h3000_0000),.tlb_inv_valid,.block_submissions,.tlb_inv_all,.tlb_inv_asid,.translation_idle,.ptw_req_valid,.ptw_req_ready,.ptw_req_addr,.ptw_rsp_valid,.ptw_rsp_ready,.ptw_rsp_data,.ptw_rsp_error,.mem_req_valid,.mem_req_ready,.mem_req_write,.mem_req_addr,.mem_req_wdata,.mem_req_wstrb,.mem_req_qos,.mem_rsp_valid,.mem_rsp_ready,.mem_rsp_rdata,.mem_rsp_error,.cfg_valid,.cfg_ready,.cfg_kind,.cfg_bank,.cfg_output,.cfg_index,.cfg_data,.bank_generation,.irq(svc_irq),.busy,.submit_occupancy,.completion_occupancy,.completion_published,.completion_publish_tag,.completion_publish_asid,.completion_publish_status,.completion_publish_fault_stage,.completion_publish_vectors_done,.perf_tlb_hits,.perf_tlb_misses,.perf_walk_reads,.perf_faults,.last_translation_tlb_hit(),.accel_command_error(),.perf_accel_accepted(),.perf_accel_completed(),.perf_accel_input_chunks(),.perf_accel_output_stalls(),.perf_accel_bank_swaps(),.owned_valid,.owned_start,.owned_end,.owned_input_start,.owned_input_end,.owned_output_start,.owned_output_end);
   protected_irq_aggregator irqs(.clk,.rst_n,.chiplet_dma_event(chip_irq),.accelerator_event(svc_irq),.device_fault_event(chip_error),.paddr(paddr[5:0]),.psel(irq_sel),.penable(irq_apb_enable),.pwrite,.pwdata,.prdata(irq_rdata),.pready(irq_ready),.pslverr(irq_error),.irq_ext(irq),.raw_status(irq_raw),.pending_status(irq_pending),.enable_mask(irq_enable));
   generate if(ENABLE_CHIPLET)begin:chiplet_service
     protected_chiplet_apb_bridge chiplet_apb(
@@ -396,8 +428,8 @@ module rv32_protected_shared_top #(
    l1_dcache_top cache(.clk,.rst_n,.cpu_req_valid(cache_req_valid),.cpu_req_ready(cache_req_ready),.cpu_req_addr(cache_req_addr),.cpu_req_write(cache_req_write),.cpu_req_wdata(cache_req_wdata),.cpu_req_wstrb(cache_req_wstrb),.cpu_req_size(cache_req_size),.cpu_req_id(cache_req_id),.cpu_rsp_valid(cache_rsp_valid),.cpu_rsp_ready(cache_rsp_ready),.cpu_rsp_rdata(cache_rsp_rdata),.cpu_rsp_id(cache_rsp_id),.cpu_rsp_error(cache_rsp_error),.maint_valid,.maint_ready,.maint_cmd,.maint_busy,.maint_done,.maint_error,.m_axi_awaddr(s_awaddr[0]),.m_axi_awlen(s_awlen[0]),.m_axi_awsize(s_awsize[0]),.m_axi_awburst(s_awburst[0]),.m_axi_awvalid(s_awvalid[0]),.m_axi_awready(s_awready[0]),.m_axi_wdata(s_wdata[0]),.m_axi_wstrb(s_wstrb[0]),.m_axi_wlast(s_wlast[0]),.m_axi_wvalid(s_wvalid[0]),.m_axi_wready(s_wready[0]),.m_axi_bresp(s_bresp[0]),.m_axi_bvalid(s_bvalid[0]),.m_axi_bready(s_bready[0]),.m_axi_araddr(s_araddr[0]),.m_axi_arlen(s_arlen[0]),.m_axi_arsize(s_arsize[0]),.m_axi_arburst(s_arburst[0]),.m_axi_arvalid(s_arvalid[0]),.m_axi_arready(s_arready[0]),.m_axi_rdata(s_rdata[0]),.m_axi_rresp(s_rresp[0]),.m_axi_rlast(s_rlast[0]),.m_axi_rvalid(s_rvalid[0]),.m_axi_rready(s_rready[0]),.mon_state(cache_state),.mon_hit(cache_hit),.mon_miss(cache_miss),.mon_evict(cache_evict),.mon_refill_beat(refill_beat),.mon_writeback_beat(writeback_beat));
    assign s_awid[0]=0;assign s_awprot[0]=0;assign s_awqos[0]=8;assign s_arid[0]=0;assign s_arprot[0]=0;assign s_arqos[0]=8;
   end endgenerate
-  protected_dma_axi_adapter #(.AXI_ID(1)) dmax(.clk,.rst_n,.req_valid(mem_req_valid),.req_ready(mem_req_ready),.req_write(mem_req_write),.req_addr(mem_req_addr),.req_wdata(mem_req_wdata),.req_wstrb(mem_req_wstrb),.req_qos(mem_req_qos),.rsp_valid(mem_rsp_valid),.rsp_ready(mem_rsp_ready),.rsp_rdata(mem_rsp_rdata),.rsp_error(mem_rsp_error),.awvalid(s_awvalid[1]),.awready(s_awready[1]),.awid(s_awid[1]),.awaddr(s_awaddr[1]),.awlen(s_awlen[1]),.awsize(s_awsize[1]),.awburst(s_awburst[1]),.awprot(s_awprot[1]),.awqos(s_awqos[1]),.wvalid(s_wvalid[1]),.wready(s_wready[1]),.wdata(s_wdata[1]),.wstrb(s_wstrb[1]),.wlast(s_wlast[1]),.bvalid(s_bvalid[1]),.bready(s_bready[1]),.bid(s_bid[1]),.bresp(s_bresp[1]),.arvalid(s_arvalid[1]),.arready(s_arready[1]),.arid(s_arid[1]),.araddr(s_araddr[1]),.arlen(s_arlen[1]),.arsize(s_arsize[1]),.arburst(s_arburst[1]),.arprot(s_arprot[1]),.arqos(s_arqos[1]),.rvalid(s_rvalid[1]),.rready(s_rready[1]),.rid(s_rid[1]),.rdata(s_rdata[1]),.rresp(s_rresp[1]),.rlast(s_rlast[1]));
-  protected_dma_axi_adapter #(.AXI_ID(2)) ptwx(.clk,.rst_n,.req_valid(ptw_req_valid),.req_ready(ptw_req_ready),.req_write(1'b0),.req_addr(ptw_req_addr),.req_wdata('0),.req_wstrb('0),.req_qos(4'hf),.rsp_valid(ptw_rsp_valid),.rsp_ready(ptw_rsp_ready),.rsp_rdata(ptw_rsp_data),.rsp_error(ptw_rsp_error),.awvalid(s_awvalid[2]),.awready(s_awready[2]),.awid(s_awid[2]),.awaddr(s_awaddr[2]),.awlen(s_awlen[2]),.awsize(s_awsize[2]),.awburst(s_awburst[2]),.awprot(s_awprot[2]),.awqos(s_awqos[2]),.wvalid(s_wvalid[2]),.wready(s_wready[2]),.wdata(s_wdata[2]),.wstrb(s_wstrb[2]),.wlast(s_wlast[2]),.bvalid(s_bvalid[2]),.bready(s_bready[2]),.bid(s_bid[2]),.bresp(s_bresp[2]),.arvalid(s_arvalid[2]),.arready(s_arready[2]),.arid(s_arid[2]),.araddr(s_araddr[2]),.arlen(s_arlen[2]),.arsize(s_arsize[2]),.arburst(s_arburst[2]),.arprot(s_arprot[2]),.arqos(s_arqos[2]),.rvalid(s_rvalid[2]),.rready(s_rready[2]),.rid(s_rid[2]),.rdata(s_rdata[2]),.rresp(s_rresp[2]),.rlast(s_rlast[2]));
+  protected_dma_axi_adapter #(.AXI_ID(1)) dmax(.clk,.rst_n,.req_valid(mem_req_valid&&!offload_reset_active),.req_ready(dma_adapter_idle),.req_write(mem_req_write),.req_addr(mem_req_addr),.req_wdata(mem_req_wdata),.req_wstrb(mem_req_wstrb),.req_qos(mem_req_qos),.rsp_valid(dma_adapter_rsp_valid),.rsp_ready(mem_rsp_ready||offload_reset_active),.rsp_rdata(mem_rsp_rdata),.rsp_error(mem_rsp_error),.awvalid(s_awvalid[1]),.awready(s_awready[1]),.awid(s_awid[1]),.awaddr(s_awaddr[1]),.awlen(s_awlen[1]),.awsize(s_awsize[1]),.awburst(s_awburst[1]),.awprot(s_awprot[1]),.awqos(s_awqos[1]),.wvalid(s_wvalid[1]),.wready(s_wready[1]),.wdata(s_wdata[1]),.wstrb(s_wstrb[1]),.wlast(s_wlast[1]),.bvalid(s_bvalid[1]),.bready(s_bready[1]),.bid(s_bid[1]),.bresp(s_bresp[1]),.arvalid(s_arvalid[1]),.arready(s_arready[1]),.arid(s_arid[1]),.araddr(s_araddr[1]),.arlen(s_arlen[1]),.arsize(s_arsize[1]),.arburst(s_arburst[1]),.arprot(s_arprot[1]),.arqos(s_arqos[1]),.rvalid(s_rvalid[1]),.rready(s_rready[1]),.rid(s_rid[1]),.rdata(s_rdata[1]),.rresp(s_rresp[1]),.rlast(s_rlast[1]));
+  protected_dma_axi_adapter #(.AXI_ID(2)) ptwx(.clk,.rst_n,.req_valid(ptw_req_valid&&!offload_reset_active),.req_ready(ptw_adapter_idle),.req_write(1'b0),.req_addr(ptw_req_addr),.req_wdata('0),.req_wstrb('0),.req_qos(4'hf),.rsp_valid(ptw_adapter_rsp_valid),.rsp_ready(ptw_rsp_ready||offload_reset_active),.rsp_rdata(ptw_rsp_data),.rsp_error(ptw_rsp_error),.awvalid(s_awvalid[2]),.awready(s_awready[2]),.awid(s_awid[2]),.awaddr(s_awaddr[2]),.awlen(s_awlen[2]),.awsize(s_awsize[2]),.awburst(s_awburst[2]),.awprot(s_awprot[2]),.awqos(s_awqos[2]),.wvalid(s_wvalid[2]),.wready(s_wready[2]),.wdata(s_wdata[2]),.wstrb(s_wstrb[2]),.wlast(s_wlast[2]),.bvalid(s_bvalid[2]),.bready(s_bready[2]),.bid(s_bid[2]),.bresp(s_bresp[2]),.arvalid(s_arvalid[2]),.arready(s_arready[2]),.arid(s_arid[2]),.araddr(s_araddr[2]),.arlen(s_arlen[2]),.arsize(s_arsize[2]),.arburst(s_arburst[2]),.arprot(s_arprot[2]),.arqos(s_arqos[2]),.rvalid(s_rvalid[2]),.rready(s_rready[2]),.rid(s_rid[2]),.rdata(s_rdata[2]),.rresp(s_rresp[2]),.rlast(s_rlast[2]));
   axi4_qos_fabric fabric(.clk,.rst_n,.*,.mon_ar_age_override(age_ar),.mon_aw_age_override(age_aw));
   protected_axi_sram #(.ID_W(TIDW),.WORDS(16),.BASE(0),.FORCE_ERROR(1)) reserved(.clk,.rst_n,.awvalid(m_awvalid[0]),.awready(m_awready[0]),.awid(m_awid[0]),.awaddr(m_awaddr[0]),.awlen(m_awlen[0]),.awsize(m_awsize[0]),.wvalid(m_wvalid[0]),.wready(m_wready[0]),.wdata(m_wdata[0]),.wstrb(m_wstrb[0]),.wlast(m_wlast[0]),.bvalid(m_bvalid[0]),.bready(m_bready[0]),.bid(m_bid[0]),.bresp(m_bresp[0]),.arvalid(m_arvalid[0]),.arready(m_arready[0]),.arid(m_arid[0]),.araddr(m_araddr[0]),.arlen(m_arlen[0]),.arsize(m_arsize[0]),.rvalid(m_rvalid[0]),.rready(m_rready[0]),.rid(m_rid[0]),.rdata(m_rdata[0]),.rresp(m_rresp[0]),.rlast(m_rlast[0]));
 `define SRAM(I,N,B,E) protected_axi_sram #(.ID_W(TIDW),.WORDS(N),.BASE(B),.FORCE_ERROR(E)) mem``I(.clk,.rst_n,.awvalid(m_awvalid[I]),.awready(m_awready[I]),.awid(m_awid[I]),.awaddr(m_awaddr[I]),.awlen(m_awlen[I]),.awsize(m_awsize[I]),.wvalid(m_wvalid[I]),.wready(m_wready[I]),.wdata(m_wdata[I]),.wstrb(m_wstrb[I]),.wlast(m_wlast[I]),.bvalid(m_bvalid[I]),.bready(m_bready[I]),.bid(m_bid[I]),.bresp(m_bresp[I]),.arvalid(m_arvalid[I]),.arready(m_arready[I]),.arid(m_arid[I]),.araddr(m_araddr[I]),.arlen(m_arlen[I]),.arsize(m_arsize[I]),.rvalid(m_rvalid[I]),.rready(m_rready[I]),.rid(m_rid[I]),.rdata(m_rdata[I]),.rresp(m_rresp[I]),.rlast(m_rlast[I]));
@@ -418,7 +450,7 @@ module rv32_protected_shared_top #(
     .dma_awvalid(s_awvalid[1]),.dma_awready(s_awready[1]),.dma_awaddr(s_awaddr[1]),
     .dma_bvalid(s_bvalid[1]),.dma_bready(s_bready[1]),
     .maint_busy,
-    .clk,.rst_n,.commit_valid,.commit_pc,.commit_instr,.psel,.penable,.pwrite,.pwdata,.pready,.pslverr,.paddr,.prdata,
+    .clk,.rst_n,.offload_reset_active,.commit_valid,.commit_pc,.commit_instr,.psel,.penable,.pwrite,.pwdata,.pready,.pslverr,.paddr,.prdata,
     .cpu_shared_access(cache_data_sel&&psel&&penable&&pready),.cpu_shared_write(pwrite),.cpu_physical_addr(paddr),
     .commit_trap,.commit_intr,.commit_rs1_addr,.commit_rs2_addr,.commit_rs1_data,.commit_rs2_data,.commit_rd_addr,.commit_rd_data,.commit_mem_addr,.commit_mem_rmask,.commit_mem_wmask,.commit_mem_rdata,.commit_mem_wdata,.commit_mstatus,.commit_mie,.commit_mtvec,.commit_mscratch,.commit_mepc,.commit_mcause,.commit_mtval,.cpu_enable_m(CPU_ENABLE_M),.irq_ext_level(irq),.irq_timer_level(timer_irq),.muldiv_busy(cpu.muldiv_active_q),.muldiv_result_valid(cpu.muldiv_rsp_valid),
     .muldiv_state(cpu.u_muldiv.state_q),.muldiv_iteration(cpu.u_muldiv.iteration_q),.muldiv_pc(cpu.pending_pc_q),

@@ -4,10 +4,10 @@ Collected from 48 directed compiled-firmware scenarios, 100 seeded firmware/DMA 
 
 Point identity is source-based and unioned across all passing runs, elaborated parameterizations, and instances. A source point is covered when at least one tested configuration/instance executes it; this is not a claim that every instance or configuration has independent closure. Integrated, imported, ownership-monitor, and memory-model scopes remain separately visible.
 
-- Raw line coverage: **744 / 890 (83.60%)**
-- Raw branch coverage: **717/926 (77.43%)**
-- Raw expression coverage: **1400 / 1787 (78.34%)**
-- Raw toggle coverage: **27215 / 57434 (47.38%)**
+- Raw line coverage: **753 / 898 (83.85%)**
+- Raw branch coverage: **736/950 (77.47%)**
+- Raw expression coverage: **1429 / 1822 (78.43%)**
+- Raw toggle coverage: **27249 / 57516 (47.38%)**
 - New protected-control raw coverage: line **119 / 124 (95.97%)**, branch **174 / 190 (91.58%)**
 - New-control reviewed branch coverage: **174 / 190 (91.58%)**; exclusions: **0** reviewed unreachable FSM default points
 - Verification-only ownership monitor and AXI memory target are reported in separate scopes, not counted as synthesizable control RTL. The aggregate integrated scope above remains raw and includes imported RV32/cache/fabric/chiplet logic.

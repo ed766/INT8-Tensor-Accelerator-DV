@@ -203,7 +203,7 @@ protected-offload-firmware:
 	$(PYTHON) integration/protected_offload/scripts/run_firmware_matrix.py
 
 protected-offload-uvm:
-	@echo "PROTECTED_OFFLOAD_UVM|status=NOT_APPLICABLE|detail=firmware/APB is canonical; reusable UVM/VIP remains in AXI4 QoS fabric project"
+	$(PYTHON) integration/protected_offload/scripts/run_reset_uvm.py
 
 protected-offload-random:
 	$(PYTHON) integration/protected_offload/scripts/run_protected_offload.py random

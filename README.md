@@ -65,8 +65,8 @@ This project is the portfolio's ML/datapath example. It shows how a PyTorch mode
 | Crossover event-correlated crosses | `53 / 53` |
 | Crossover RTL mutations detected | `12 / 12` |
 | Crossover formal/property groups | `16 / 16` |
-| Crossover raw integrated-top code coverage | `744 / 890 native lines (83.60%); branch 717 / 926 (77.43%); expression 78.34%; toggle 47.38%` |
-| Standalone protected-offload line coverage | `raw 289 / 341 (84.75%)` |
+| Crossover raw integrated-top code coverage | `753 / 898 native lines (83.85%); branch 736 / 950 (77.47%); expression 78.43%; toggle 47.38%` |
+| Standalone protected-offload line coverage | `raw 347 / 414 (83.82%)` |
 <!-- END GENERATED METRICS -->
 
 See [project metrics](docs/project_metrics.md), the [verification plan](docs/verification_plan.md), the [FX graph compiler](docs/fx_graph_compiler.md), and the [two-layer PyTorch demonstration](docs/pytorch_mlp_demo.md).
@@ -222,7 +222,8 @@ High-signal evidence:
 - [PyTorch/RTL comparison](reports/rtl_vs_pytorch_summary.csv)
 - [Two-layer RTL chain](reports/pytorch_mlp_rtl_summary.csv)
 - [PyTorch FX compiler and RTL execution](docs/fx_graph_compiler.md)
-- [MLIR backend and PyTorch ADC precision experiment](docs/mlir_backend.md#pytorch-experiment-on-adc-precision)
+- [PyTorch-to-MLIR workflow and scratch reuse diagram](docs/mlir_backend.md#what-the-compiler-changes)
+- [PyTorch ADC precision experiment](docs/mlir_backend.md#pytorch-experiment-on-adc-precision)
 - [Functional coverage](reports/functional_coverage.csv)
 - [Interaction crosses](reports/cross_coverage.csv)
 - [RTL mutation sensitivity](reports/mutation_summary.csv)

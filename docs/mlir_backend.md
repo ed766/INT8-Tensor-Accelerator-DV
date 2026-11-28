@@ -21,6 +21,8 @@ simulation cycles.
 
 ## What the compiler changes
 
+![PyTorch FX captures the shared trunk and two heads. MLIR plans their scratch lifetimes, and RV32 firmware runs the resulting DMA schedule.](images/mlir_schedule.svg)
+
 The [input MLIR](../compiler/mlir/model.mlir) describes the fixed
 16→4→4 Linear/ReLU/Linear workload. A C++ MLIR pass validates the graph and
 lowers it to calls into the firmware scheduling ABI. The same pass emits

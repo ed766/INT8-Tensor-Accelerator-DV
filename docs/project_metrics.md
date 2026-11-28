@@ -54,7 +54,7 @@
 | `compute_crossover_event_crosses` | 53 / 53 | Versioned event-correlated observed-bin manifest; all witnesses validated against trace hashes and event IDs |
 | `compute_crossover_rtl_mutations` | 12 / 12 | Named crossover mutation matrix; compile, activation, and intended checker bucket required |
 | `compute_crossover_formal` | 16 / 16 | 16 solver-reachable; other evidence types reported separately |
-| `compute_crossover_raw_code_coverage` | 744 / 890 native lines (83.60%); branch 717 / 926 (77.43%); expression 78.34%; toggle 47.38% | Integrated-top native Verilator point types reported separately; 48 directed + 100 firmware/DMA + 100 CPU-stream + 8 cache-ownership databases; targets are 95% line and 90% branch, currently unmet; no exclusions |
-| `protected_offload_code` | raw 289 / 341 (84.75%) | reviewed=289/289 (100.00%); exclusions=52; merged from 106 executable runs |
+| `compute_crossover_raw_code_coverage` | 753 / 898 native lines (83.85%); branch 736 / 950 (77.47%); expression 78.43%; toggle 47.38% | Integrated-top native Verilator point types reported separately; 48 directed + 100 firmware/DMA + 100 CPU-stream + 8 cache-ownership databases; targets are 95% line and 90% branch, currently unmet; no exclusions |
+| `protected_offload_code` | raw 347 / 414 (83.82%) | reviewed=347/355 (97.75%); exclusions=59; merged from 106 executable runs |
 
 All values are regenerated from checked-in CSV evidence by `make release-check`.
